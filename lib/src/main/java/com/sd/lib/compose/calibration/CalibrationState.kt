@@ -25,8 +25,6 @@ class CalibrationState internal constructor(
   internal var stableGroups by mutableStateOf<List<CalibrationGroup>>(emptyList())
     private set
 
-  private val _stableGroups by lazy { groups.map { it.toStableCalibrationGroup() } }
-
   fun getCurrentGroups(): List<CalibrationGroup> {
     val scaleX = _scaleX.takeIf { it > 0f } ?: 1f
     val scaleY = _scaleY.takeIf { it > 0f } ?: 1f
@@ -51,8 +49,8 @@ class CalibrationState internal constructor(
     if (_scaleX != scaleX || _scaleY != scaleY) {
       _scaleX = scaleX
       _scaleY = scaleY
-      _stableGroups.forEach { it.scalePoints(scaleX = scaleX, scaleY = scaleY) }
-      stableGroups = _stableGroups
+      stableGroups = groups.map { it.toStableCalibrationGroup() }
+        .onEach { it.scalePoints(scaleX = scaleX, scaleY = scaleY) }
     }
   }
 }
