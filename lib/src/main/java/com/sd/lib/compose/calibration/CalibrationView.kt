@@ -1,17 +1,23 @@
 package com.sd.lib.compose.calibration
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitDragOrCancellation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -19,7 +25,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.toIntRect
 import androidx.compose.ui.unit.toSize
-import com.sd.lib.compose.gesture.fPointer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -67,55 +72,51 @@ fun CalibrationView(
     }
   }
 
+  val getConfigUpdated by rememberUpdatedState(getConfig)
+
   Canvas(
     modifier = modifier
       .onSizeChanged { canvasSize = it.toSize() }
-      .fPointer(
-        onStart = {
-          calculatePan = true
+      .pointerInput(state) {
+        awaitEachGesture {
+          val down = awaitFirstDown()
           touchedPoint = null
-        },
-        onDown = { input ->
-          if (pointerCount == 1) {
-            // 查找是否触摸到点
-            selectedGroup?.also { group ->
-              val point = findTouchedPoint(
-                group = group,
-                touched = input.position,
-                getConfig = { getConfig(it, null) },
-              )
-              if (point != null) {
-                touchedPoint = point
-                return@fPointer
-              }
-            }
+
+          selectedGroup?.also { group ->
+            touchedPoint = findTouchedPoint(
+              group = group,
+              touched = down.position,
+              getConfig = { getConfigUpdated(it, null) },
+            )
+          }
+
+          if (touchedPoint == null) {
             for (group in state.stableGroups) {
               if (group == selectedGroup) continue
               val point = findTouchedPoint(
                 group = group,
-                touched = input.position,
-                getConfig = { getConfig(it, null) },
+                touched = down.position,
+                getConfig = { getConfigUpdated(it, null) },
               )
               if (point != null) {
                 touchedPoint = point
                 selectedGroup = group
-                return@fPointer
+                break
               }
             }
-            if (touchedPoint == null) {
-              cancelPointer()
-            }
           }
-        },
-        onCalculate = {
-          val point = touchedPoint
-          if (point != null) {
-            point.updateOffset(offset = pan, bounds = size.toIntRect())
-          } else {
-            cancelPointer()
+
+          val targetPoint = touchedPoint ?: return@awaitEachGesture
+
+          while (true) {
+            val change = awaitDragOrCancellation(down.id) ?: break
+            if (!change.pressed) break
+            val dragAmount = change.positionChange()
+            change.consume()
+            targetPoint.updateOffset(offset = dragAmount, bounds = size.toIntRect())
           }
-        },
-      )
+        }
+      }
   ) {
     if (inspectionMode) {
       state.setSize(viewSize = size, sourceSize = sourceSize ?: size)
