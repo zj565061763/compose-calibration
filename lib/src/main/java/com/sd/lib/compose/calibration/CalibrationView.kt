@@ -88,13 +88,12 @@ fun CalibrationView(
           if (touchedPoint == null) {
             for (group in state.stableGroups) {
               if (group == selectedGroup) continue
-              val point = findTouchedPoint(
+              touchedPoint = findTouchedPoint(
                 group = group,
                 touched = down.position,
                 getConfig = { getConfigUpdated(it, null) },
               )
-              if (point != null) {
-                touchedPoint = point
+              if (touchedPoint != null) {
                 selectedGroup = group
                 break
               }
