@@ -53,11 +53,8 @@ fun CalibrationView(
     }
   }
 
-  var touchedPoint by remember { mutableStateOf<Calibration.Point?>(null) }
   var selectedGroup by remember { mutableStateOf<CalibrationGroup?>(null) }
-
   LaunchedEffect(state) {
-    touchedPoint = null
     selectedGroup = null
   }
 
@@ -79,10 +76,9 @@ fun CalibrationView(
       .pointerInput(state) {
         awaitEachGesture {
           val down = awaitFirstDown()
-          touchedPoint = null
 
-          selectedGroup?.also { group ->
-            touchedPoint = findTouchedPoint(
+          var touchedPoint = selectedGroup?.let { group ->
+            findTouchedPoint(
               group = group,
               touched = down.position,
               getConfig = { getConfigUpdated(it, null) },
@@ -105,14 +101,12 @@ fun CalibrationView(
             }
           }
 
-          val targetPoint = touchedPoint ?: return@awaitEachGesture
-
-          while (true) {
+          while (touchedPoint != null) {
             val change = awaitDragOrCancellation(down.id) ?: break
             if (!change.pressed) break
             val dragAmount = change.positionChange()
             change.consume()
-            targetPoint.updateOffset(offset = dragAmount, bounds = size.toIntRect())
+            touchedPoint.updateOffset(offset = dragAmount, bounds = size.toIntRect())
           }
         }
       }
