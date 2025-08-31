@@ -53,7 +53,6 @@ fun CalibrationView(
     }
   }
 
-  val inspectionMode = LocalInspectionMode.current
   var touchedPoint by remember { mutableStateOf<Calibration.Point?>(null) }
   var selectedGroup by remember { mutableStateOf<CalibrationGroup?>(null) }
 
@@ -63,15 +62,15 @@ fun CalibrationView(
   }
 
   var canvasSize by remember { mutableStateOf<Size?>(null) }
-  val viewSize = canvasSize
-  if (viewSize != null) {
-    LaunchedEffect(state, viewSize, sourceSize) {
+  canvasSize?.also { size ->
+    LaunchedEffect(state, size, sourceSize) {
       withContext(Dispatchers.Default) {
-        state.setSize(viewSize = viewSize, sourceSize = sourceSize ?: viewSize)
+        state.setSize(viewSize = size, sourceSize = sourceSize ?: size)
       }
     }
   }
 
+  val inspectionMode = LocalInspectionMode.current
   val getConfigUpdated by rememberUpdatedState(getConfig)
 
   Canvas(
