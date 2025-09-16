@@ -1,9 +1,10 @@
 package com.sd.lib.compose.calibration
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.awaitDragOrCancellation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -100,9 +101,18 @@ fun CalibrationView(
             }
           }
 
-          while (touchedPoint != null) {
-            val change = awaitDragOrCancellation(down.id) ?: break
-            if (!change.pressed) break
+          if (touchedPoint == null) {
+            return@awaitEachGesture
+          }
+
+          val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
+          if (touchSlopChange == null) return@awaitEachGesture
+
+          (touchSlopChange.position - down.position).also { initialDistance ->
+            touchedPoint.updateOffset(offset = initialDistance, bounds = size.toIntRect())
+          }
+
+          drag(touchSlopChange.id) { change ->
             val dragAmount = change.positionChange()
             change.consume()
             touchedPoint.updateOffset(offset = dragAmount, bounds = size.toIntRect())
