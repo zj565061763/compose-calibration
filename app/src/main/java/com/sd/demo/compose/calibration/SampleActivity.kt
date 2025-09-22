@@ -12,7 +12,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
 import com.sd.demo.compose.calibration.theme.AppTheme
 import com.sd.lib.compose.calibration.Calibration
@@ -42,7 +46,7 @@ private fun Content(
     val group2 = CalibrationGroup.create(
       Calibration
         .create(id = "2", points = getDefaultPoints("2", startX = 500f, startY = 500f))
-        .drawable(CalibrationDrawer.create())
+        .drawable(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
     )
     listOf(group1, group2)
   }
@@ -79,6 +83,23 @@ private fun getDefaultPoints(
     Calibration.Point.create("${listPointIndex[2]}${group}", startX + delta, startY + delta),
     Calibration.Point.create("${listPointIndex[3]}${group}", startX, startY + delta),
   )
+}
+
+private class CustomPointDrawer : CalibrationDrawer {
+  override fun DrawScope.draw(
+    calibration: Calibration,
+    config: Calibration.Config,
+    textMeasurer: TextMeasurer,
+  ) {
+    calibration.points.forEach { point ->
+      val sizePX = config.pointSize.toPx()
+      drawRect(
+        color = config.pointColor,
+        topLeft = Offset(point.x - sizePX / 2f, point.y - sizePX / 2f),
+        size = Size(sizePX, sizePX),
+      )
+    }
+  }
 }
 
 @Preview

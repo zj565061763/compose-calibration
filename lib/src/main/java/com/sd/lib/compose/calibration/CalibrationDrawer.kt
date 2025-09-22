@@ -145,7 +145,7 @@ private class DefaultPointNameDrawer : CalibrationDrawer {
   }
 }
 
-private fun Calibration.Point.toComposeOffset(
+fun Calibration.Point.toComposeOffset(
   appendX: Float = 0f,
   appendY: Float = 0f,
 ): Offset {
