@@ -92,11 +92,11 @@ private class CustomPointDrawer : CalibrationDrawer {
     textMeasurer: TextMeasurer,
   ) {
     calibration.points.forEach { point ->
-      val sizePX = config.pointSize.toPx()
+      val pointSizePX = config.pointSize.toPx()
       drawRect(
         color = config.pointColor,
-        topLeft = Offset(point.x - sizePX / 2f, point.y - sizePX / 2f),
-        size = Size(sizePX, sizePX),
+        topLeft = Offset(point.x - pointSizePX / 2f, point.y - pointSizePX / 2f),
+        size = Size(pointSizePX, pointSizePX),
       )
     }
   }
