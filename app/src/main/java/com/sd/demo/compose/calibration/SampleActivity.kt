@@ -16,8 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import com.sd.demo.compose.calibration.theme.AppTheme
 import com.sd.lib.compose.calibration.Calibration
+import com.sd.lib.compose.calibration.CalibrationDrawer
 import com.sd.lib.compose.calibration.CalibrationGroup
 import com.sd.lib.compose.calibration.CalibrationView
+import com.sd.lib.compose.calibration.drawable
 import com.sd.lib.compose.calibration.rememberCalibrationState
 
 class SampleActivity : ComponentActivity() {
@@ -36,8 +38,12 @@ private fun Content(
   modifier: Modifier = Modifier,
 ) {
   val groups = remember {
-    val group1 = CalibrationGroup.create(Calibration(id = "1", points = getDefaultPoints("1", startX = 100f, startY = 100f)))
-    val group2 = CalibrationGroup.create(Calibration(id = "2", points = getDefaultPoints("2", startX = 500f, startY = 500f)))
+    val group1 = CalibrationGroup.create(Calibration.create(id = "1", points = getDefaultPoints("1", startX = 100f, startY = 100f)))
+    val group2 = CalibrationGroup.create(
+      Calibration
+        .create(id = "2", points = getDefaultPoints("2", startX = 500f, startY = 500f))
+        .drawable(CalibrationDrawer.create())
+    )
     listOf(group1, group2)
   }
 

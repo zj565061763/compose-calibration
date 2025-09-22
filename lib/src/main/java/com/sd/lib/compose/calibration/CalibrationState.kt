@@ -37,7 +37,7 @@ class CalibrationState internal constructor(
             y = point.y / scaleY,
           )
         }
-        calibration.copy(points = points)
+        calibration.copyWith(points = points)
       }
       group.copy(calibrations = calibrations)
     }

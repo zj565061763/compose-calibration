@@ -13,7 +13,6 @@ import androidx.compose.ui.unit.dp
 data class CalibrationGroup(
   val calibrations: List<Calibration>,
 ) {
-
   /** 是否包含指定[id]的标定 */
   fun containsCalibration(id: String): Boolean {
     return calibrations.any { it.id == id }
@@ -28,10 +27,15 @@ data class CalibrationGroup(
 
 /** 标定 */
 @Stable
-data class Calibration(
-  val id: String,
-  val points: List<Point>,
-) {
+interface Calibration {
+  val id: String
+  val points: List<Point>
+
+  fun copyWith(
+    id: String? = null,
+    points: List<Point>? = null,
+  ): Calibration
+
   @Immutable
   data class Config(
     val lineColor: Color = Color.Red,
@@ -59,6 +63,27 @@ data class Calibration(
       }
     }
   }
+
+  companion object {
+    fun create(id: String, points: List<Point>): Calibration {
+      return ImmutableCalibrationImpl(id = id, points = points)
+    }
+  }
+}
+
+private data class ImmutableCalibrationImpl(
+  override val id: String,
+  override val points: List<Calibration.Point>,
+) : Calibration {
+  override fun copyWith(
+    id: String?,
+    points: List<Calibration.Point>?,
+  ): Calibration {
+    return copy(
+      id = id ?: this.id,
+      points = points ?: this.points,
+    )
+  }
 }
 
 internal interface StablePoint : Calibration.Point {
@@ -70,7 +95,7 @@ internal fun CalibrationGroup.toStableCalibrationGroup(): CalibrationGroup {
 }
 
 private fun Calibration.toStableCalibration(): Calibration {
-  return copy(points = points.map { it.toStablePoint() })
+  return copyWith(points = points.map { it.toStablePoint() })
 }
 
 private fun Calibration.Point.toStablePoint(): Calibration.Point {

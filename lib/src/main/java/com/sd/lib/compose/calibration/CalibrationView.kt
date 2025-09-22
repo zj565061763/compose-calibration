@@ -43,20 +43,6 @@ fun CalibrationView(
     }
   },
 ) {
-  val drawer = remember {
-    object : CalibrationDrawer {
-      override fun DrawScope.draw(
-        calibration: Calibration,
-        config: Calibration.Config,
-        textMeasurer: TextMeasurer,
-      ) {
-        CalibrationDrawer.DefaultLineDrawer.run { draw(calibration, config, textMeasurer) }
-        CalibrationDrawer.DefaultPointDrawer.run { draw(calibration, config, textMeasurer) }
-        CalibrationDrawer.DefaultPointNameDrawer.run { draw(calibration, config, textMeasurer) }
-      }
-    }
-  }
-
   var selectedGroup by remember { mutableStateOf<CalibrationGroup?>(null) }
   LaunchedEffect(state) {
     selectedGroup = null
@@ -131,7 +117,6 @@ fun CalibrationView(
       if (group == selectedGroup) continue
       drawCalibrationGroup(
         group = group,
-        drawer = drawer,
         getConfig = { getConfig(it, selectedGroup) },
         textMeasurer = textMeasurer,
       )
@@ -139,7 +124,6 @@ fun CalibrationView(
     selectedGroup?.also { group ->
       drawCalibrationGroup(
         group = group,
-        drawer = drawer,
         getConfig = { getConfig(it, selectedGroup) },
         textMeasurer = textMeasurer,
       )
@@ -150,12 +134,12 @@ fun CalibrationView(
 /** 绘制标定组 */
 private inline fun DrawScope.drawCalibrationGroup(
   group: CalibrationGroup,
-  drawer: CalibrationDrawer,
   getConfig: (Calibration) -> Calibration.Config,
   textMeasurer: TextMeasurer,
 ) {
   for (calibration in group.calibrations) {
     val config = getConfig(calibration)
+    val drawer = (calibration as? CalibrationDrawer) ?: CalibrationDrawer.DefaultDrawer
     drawer.run { draw(calibration, config, textMeasurer) }
   }
 }

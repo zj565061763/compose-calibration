@@ -14,9 +14,35 @@ fun interface CalibrationDrawer {
   )
 
   companion object {
-    internal val DefaultLineDrawer: CalibrationDrawer = DefaultLineDrawer()
-    internal val DefaultPointDrawer: CalibrationDrawer = DefaultPointDrawer()
-    internal val DefaultPointNameDrawer: CalibrationDrawer = DefaultPointNameDrawer()
+    internal val DefaultDrawer: CalibrationDrawer = create()
+
+    fun create(
+      lineDrawer: CalibrationDrawer = DefaultLineDrawer(),
+      pointDrawer: CalibrationDrawer = DefaultPointDrawer(),
+      pointNameDrawer: CalibrationDrawer = DefaultPointNameDrawer(),
+    ): CalibrationDrawer {
+      return DefaultDrawer(
+        lineDrawer = lineDrawer,
+        pointDrawer = pointDrawer,
+        pointNameDrawer = pointNameDrawer,
+      )
+    }
+  }
+}
+
+private class DefaultDrawer(
+  val lineDrawer: CalibrationDrawer,
+  val pointDrawer: CalibrationDrawer,
+  val pointNameDrawer: CalibrationDrawer,
+) : CalibrationDrawer {
+  override fun DrawScope.draw(
+    calibration: Calibration,
+    config: Calibration.Config,
+    textMeasurer: TextMeasurer,
+  ) {
+    lineDrawer.run { draw(calibration, config, textMeasurer) }
+    pointDrawer.run { draw(calibration, config, textMeasurer) }
+    pointNameDrawer.run { draw(calibration, config, textMeasurer) }
   }
 }
 
