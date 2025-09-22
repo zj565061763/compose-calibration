@@ -21,6 +21,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntRect
@@ -42,14 +43,16 @@ fun CalibrationView(
     }
   },
 ) {
-  val textMeasurer = rememberTextMeasurer()
-  val drawer = remember(textMeasurer) {
-    val pointNameDrawer = CalibrationDrawer.pointNameDrawer(textMeasurer)
+  val drawer = remember {
     object : CalibrationDrawer {
-      override fun DrawScope.draw(calibration: Calibration, config: Calibration.Config) {
-        CalibrationDrawer.DefaultLineDrawer.run { draw(calibration, config) }
-        CalibrationDrawer.DefaultPointDrawer.run { draw(calibration, config) }
-        pointNameDrawer.run { draw(calibration, config) }
+      override fun DrawScope.draw(
+        calibration: Calibration,
+        config: Calibration.Config,
+        textMeasurer: TextMeasurer,
+      ) {
+        CalibrationDrawer.DefaultLineDrawer.run { draw(calibration, config, textMeasurer) }
+        CalibrationDrawer.DefaultPointDrawer.run { draw(calibration, config, textMeasurer) }
+        CalibrationDrawer.DefaultPointNameDrawer.run { draw(calibration, config, textMeasurer) }
       }
     }
   }
@@ -70,6 +73,7 @@ fun CalibrationView(
 
   val inspectionMode = LocalInspectionMode.current
   val getConfigUpdated by rememberUpdatedState(getConfig)
+  val textMeasurer = rememberTextMeasurer()
 
   Canvas(
     modifier = modifier
@@ -128,14 +132,16 @@ fun CalibrationView(
       drawCalibrationGroup(
         group = group,
         drawer = drawer,
-        getConfig = { getConfig(it, selectedGroup) }
+        getConfig = { getConfig(it, selectedGroup) },
+        textMeasurer = textMeasurer,
       )
     }
     selectedGroup?.also { group ->
       drawCalibrationGroup(
         group = group,
         drawer = drawer,
-        getConfig = { getConfig(it, selectedGroup) }
+        getConfig = { getConfig(it, selectedGroup) },
+        textMeasurer = textMeasurer,
       )
     }
   }
@@ -146,10 +152,11 @@ private inline fun DrawScope.drawCalibrationGroup(
   group: CalibrationGroup,
   drawer: CalibrationDrawer,
   getConfig: (Calibration) -> Calibration.Config,
+  textMeasurer: TextMeasurer,
 ) {
   for (calibration in group.calibrations) {
     val config = getConfig(calibration)
-    drawer.run { draw(calibration, config) }
+    drawer.run { draw(calibration, config, textMeasurer) }
   }
 }
 

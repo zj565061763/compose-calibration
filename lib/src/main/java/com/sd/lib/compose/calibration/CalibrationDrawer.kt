@@ -7,20 +7,25 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 
 fun interface CalibrationDrawer {
-  fun DrawScope.draw(calibration: Calibration, config: Calibration.Config)
+  fun DrawScope.draw(
+    calibration: Calibration,
+    config: Calibration.Config,
+    textMeasurer: TextMeasurer,
+  )
 
   companion object {
     internal val DefaultLineDrawer: CalibrationDrawer = DefaultLineDrawer()
     internal val DefaultPointDrawer: CalibrationDrawer = DefaultPointDrawer()
-
-    internal fun pointNameDrawer(textMeasurer: TextMeasurer): CalibrationDrawer {
-      return DefaultPointNameDrawer(textMeasurer = textMeasurer)
-    }
+    internal val DefaultPointNameDrawer: CalibrationDrawer = DefaultPointNameDrawer()
   }
 }
 
 private class DefaultLineDrawer : CalibrationDrawer {
-  override fun DrawScope.draw(calibration: Calibration, config: Calibration.Config) {
+  override fun DrawScope.draw(
+    calibration: Calibration,
+    config: Calibration.Config,
+    textMeasurer: TextMeasurer,
+  ) {
     val points = calibration.points
     when {
       points.size < 2 -> return
@@ -48,7 +53,11 @@ private class DefaultLineDrawer : CalibrationDrawer {
 }
 
 private class DefaultPointDrawer : CalibrationDrawer {
-  override fun DrawScope.draw(calibration: Calibration, config: Calibration.Config) {
+  override fun DrawScope.draw(
+    calibration: Calibration,
+    config: Calibration.Config,
+    textMeasurer: TextMeasurer,
+  ) {
     calibration.points.forEach { point ->
       drawCircle(
         color = config.pointColor,
@@ -59,10 +68,12 @@ private class DefaultPointDrawer : CalibrationDrawer {
   }
 }
 
-private class DefaultPointNameDrawer(
-  private val textMeasurer: TextMeasurer,
-) : CalibrationDrawer {
-  override fun DrawScope.draw(calibration: Calibration, config: Calibration.Config) {
+private class DefaultPointNameDrawer : CalibrationDrawer {
+  override fun DrawScope.draw(
+    calibration: Calibration,
+    config: Calibration.Config,
+    textMeasurer: TextMeasurer,
+  ) {
     val points = calibration.points
     when {
       points.isEmpty() -> return
