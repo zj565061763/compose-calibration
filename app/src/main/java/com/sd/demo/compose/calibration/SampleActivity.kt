@@ -107,8 +107,8 @@ private fun getLinePoints(
 ): List<CalibrationPoint> {
   return listOf(
     CalibrationPoint.create("${listPointIndex[0]}${group}", startX, startY),
-    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + 100f, startY),
-    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + 100f, startY + 100f),
+    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + 100f, startY + 100f),
+    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + 200f, startY + 200f),
   )
 }
 

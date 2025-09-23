@@ -212,7 +212,7 @@ private class DefaultPointNameDrawer(
     config: CalibrationConfig,
     textLayoutResult: TextLayoutResult,
   ) {
-    val appendX = config.pointSize.toPx() / 2f
+    val appendX = config.pointSize.toPx() / 2f + textLayoutResult.size.height.toFloat() / 4f
     val appendY = -textLayoutResult.size.height.toFloat() / 2f
     drawText(
       textLayoutResult = textLayoutResult,
