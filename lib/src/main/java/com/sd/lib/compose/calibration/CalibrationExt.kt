@@ -13,16 +13,10 @@ fun Calibration.drawable(drawer: CalibrationDrawer): Calibration {
 
 private data class DrawableCalibrationImpl(
   override val id: String,
-  override val points: List<Calibration.Point>,
+  override val points: List<CalibrationPoint>,
   val drawer: CalibrationDrawer,
 ) : Calibration, CalibrationDrawer by drawer {
-  override fun copyWith(
-    id: String?,
-    points: List<Calibration.Point>?,
-  ): Calibration {
-    return copy(
-      id = id ?: this.id,
-      points = points ?: this.points,
-    )
+  override fun overridePoints(points: List<CalibrationPoint>?): Calibration {
+    return copy(points = points ?: this.points)
   }
 }

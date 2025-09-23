@@ -9,7 +9,7 @@ import androidx.compose.ui.text.drawText
 fun interface CalibrationDrawer {
   fun DrawScope.draw(
     calibration: Calibration,
-    config: Calibration.Config,
+    config: CalibrationConfig,
     textMeasurer: TextMeasurer,
   )
 
@@ -37,7 +37,7 @@ private class DefaultDrawer(
 ) : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
-    config: Calibration.Config,
+    config: CalibrationConfig,
     textMeasurer: TextMeasurer,
   ) {
     lineDrawer.run { draw(calibration, config, textMeasurer) }
@@ -49,7 +49,7 @@ private class DefaultDrawer(
 private class DefaultLineDrawer : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
-    config: Calibration.Config,
+    config: CalibrationConfig,
     textMeasurer: TextMeasurer,
   ) {
     val points = calibration.points
@@ -81,7 +81,7 @@ private class DefaultLineDrawer : CalibrationDrawer {
 private class DefaultPointDrawer : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
-    config: Calibration.Config,
+    config: CalibrationConfig,
     textMeasurer: TextMeasurer,
   ) {
     calibration.points.forEach { point ->
@@ -97,7 +97,7 @@ private class DefaultPointDrawer : CalibrationDrawer {
 private class DefaultPointNameDrawer : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
-    config: Calibration.Config,
+    config: CalibrationConfig,
     textMeasurer: TextMeasurer,
   ) {
     val points = calibration.points
@@ -123,8 +123,8 @@ private class DefaultPointNameDrawer : CalibrationDrawer {
   }
 
   private fun DrawScope.drawPointTopEnd(
-    point: Calibration.Point,
-    config: Calibration.Config,
+    point: CalibrationPoint,
+    config: CalibrationConfig,
     textLayoutResult: TextLayoutResult,
   ) {
     drawText(
@@ -134,8 +134,8 @@ private class DefaultPointNameDrawer : CalibrationDrawer {
   }
 
   private fun DrawScope.drawPointBottomEnd(
-    point: Calibration.Point,
-    config: Calibration.Config,
+    point: CalibrationPoint,
+    config: CalibrationConfig,
     textLayoutResult: TextLayoutResult,
   ) {
     drawText(
@@ -145,7 +145,7 @@ private class DefaultPointNameDrawer : CalibrationDrawer {
   }
 }
 
-fun Calibration.Point.toComposeOffset(
+fun CalibrationPoint.toComposeOffset(
   appendX: Float = 0f,
   appendY: Float = 0f,
 ): Offset {

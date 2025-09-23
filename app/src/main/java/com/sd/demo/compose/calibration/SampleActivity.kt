@@ -20,8 +20,10 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
 import com.sd.demo.compose.calibration.theme.AppTheme
 import com.sd.lib.compose.calibration.Calibration
+import com.sd.lib.compose.calibration.CalibrationConfig
 import com.sd.lib.compose.calibration.CalibrationDrawer
 import com.sd.lib.compose.calibration.CalibrationGroup
+import com.sd.lib.compose.calibration.CalibrationPoint
 import com.sd.lib.compose.calibration.CalibrationView
 import com.sd.lib.compose.calibration.drawable
 import com.sd.lib.compose.calibration.rememberCalibrationState
@@ -76,19 +78,19 @@ private fun getDefaultPoints(
   startX: Float = 0f,
   startY: Float = 0f,
   delta: Float = 200f,
-): List<Calibration.Point> {
+): List<CalibrationPoint> {
   return listOf(
-    Calibration.Point.create("${listPointIndex[0]}${group}", startX, startY),
-    Calibration.Point.create("${listPointIndex[1]}${group}", startX + delta, startY),
-    Calibration.Point.create("${listPointIndex[2]}${group}", startX + delta, startY + delta),
-    Calibration.Point.create("${listPointIndex[3]}${group}", startX, startY + delta),
+    CalibrationPoint.create("${listPointIndex[0]}${group}", startX, startY),
+    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + delta, startY),
+    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + delta, startY + delta),
+    CalibrationPoint.create("${listPointIndex[3]}${group}", startX, startY + delta),
   )
 }
 
 private class CustomPointDrawer : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
-    config: Calibration.Config,
+    config: CalibrationConfig,
     textMeasurer: TextMeasurer,
   ) {
     calibration.points.forEach { point ->

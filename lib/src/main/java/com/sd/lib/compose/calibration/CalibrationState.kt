@@ -31,13 +31,13 @@ class CalibrationState internal constructor(
     return stableGroups.map { group ->
       val calibrations = group.calibrations.map { calibration ->
         val points = calibration.points.map { point ->
-          Calibration.Point.create(
+          CalibrationPoint.create(
             name = point.name,
             x = point.x / scaleX,
             y = point.y / scaleY,
           )
         }
-        calibration.copyWith(points = points)
+        calibration.overridePoints(points = points)
       }
       group.copy(calibrations = calibrations)
     }

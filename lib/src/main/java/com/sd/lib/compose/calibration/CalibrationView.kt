@@ -35,11 +35,11 @@ fun CalibrationView(
   modifier: Modifier = Modifier,
   state: CalibrationState,
   sourceSize: Size?,
-  getConfig: (current: Calibration, selected: CalibrationGroup?) -> Calibration.Config = { current, selected ->
+  getConfig: (current: Calibration, selected: CalibrationGroup?) -> CalibrationConfig = { current, selected ->
     if (selected != null && selected.containsCalibration(current.id)) {
-      Calibration.Config.DefaultSelected
+      CalibrationConfig.DefaultSelected
     } else {
-      Calibration.Config.Default
+      CalibrationConfig.Default
     }
   },
 ) {
@@ -134,7 +134,7 @@ fun CalibrationView(
 /** 绘制标定组 */
 private inline fun DrawScope.drawCalibrationGroup(
   group: CalibrationGroup,
-  getConfig: (Calibration) -> Calibration.Config,
+  getConfig: (Calibration) -> CalibrationConfig,
   textMeasurer: TextMeasurer,
 ) {
   for (calibration in group.calibrations) {
@@ -148,8 +148,8 @@ private inline fun DrawScope.drawCalibrationGroup(
 private inline fun Density.findTouchedPoint(
   group: CalibrationGroup,
   touched: Offset,
-  getConfig: (Calibration) -> Calibration.Config,
-): Calibration.Point? {
+  getConfig: (Calibration) -> CalibrationConfig,
+): CalibrationPoint? {
   return group.calibrations.firstNotNullOfOrNull { calibration ->
     val config = getConfig(calibration)
     calibration.findTouchedPoint(touched = touched, touchedSize = config.pointTouchedSize.toPx())
@@ -162,14 +162,14 @@ private fun Calibration.findTouchedPoint(
   touched: Offset,
   /** 触摸点大小 */
   touchedSize: Float,
-): Calibration.Point? {
+): CalibrationPoint? {
   return points.firstOrNull { point ->
     Rect(center = Offset(point.x, point.y), radius = touchedSize / 2f).contains(touched)
   }
 }
 
 /** 更新点的坐标 */
-private fun Calibration.Point.updateOffset(
+private fun CalibrationPoint.updateOffset(
   /** 偏移量 */
   offset: Offset,
   /** 限制范围 */
