@@ -44,18 +44,19 @@ private fun Content(
   modifier: Modifier = Modifier,
 ) {
   val groups = remember {
-    val group1 = CalibrationGroup.create(Calibration.create(id = "1", points = getDefaultPoints("1", startX = 100f, startY = 100f)))
-    val group2 = CalibrationGroup.create(
-      Calibration
-        .create(id = "2", points = getDefaultPoints("2", startX = 300f, startY = 300f))
-        .withDrawer(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
+    val calibration1 = Calibration.create(id = "1", points = getDefaultPoints("1", startX = 100f, startY = 100f))
+
+    val calibration2 = Calibration.create(id = "2", points = getDefaultPoints("2", startX = 300f, startY = 300f))
+      .withDrawer(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
+
+    val calibration3 = Calibration.create(id = "3", points = getLinePoints("3", startX = 500f, startY = 500f))
+      .withDrawer(CalibrationDrawer.create(lineDrawer = CalibrationDrawer.defaultLineDrawer(closeLines = false)))
+
+    listOf(
+      CalibrationGroup.create(calibration1),
+      CalibrationGroup.create(calibration2),
+      CalibrationGroup.create(calibration3),
     )
-    val group3 = CalibrationGroup.create(
-      Calibration
-        .create(id = "2", points = getLinePoints("2", startX = 500f, startY = 500f))
-        .withDrawer(CalibrationDrawer.create(lineDrawer = CalibrationDrawer.defaultLineDrawer(closeLines = false)))
-    )
-    listOf(group1, group2, group3)
   }
 
   val state = rememberCalibrationState(groups = groups)
