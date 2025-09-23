@@ -17,7 +17,7 @@ fun interface CalibrationDrawer {
     internal val DefaultDrawer: CalibrationDrawer = create()
 
     fun create(
-      lineDrawer: CalibrationDrawer = DefaultLineDrawer(),
+      lineDrawer: CalibrationDrawer = defaultLineDrawer(),
       pointDrawer: CalibrationDrawer = DefaultPointDrawer(),
       pointNameDrawer: CalibrationDrawer = DefaultPointNameDrawer(),
     ): CalibrationDrawer {
@@ -26,6 +26,12 @@ fun interface CalibrationDrawer {
         pointDrawer = pointDrawer,
         pointNameDrawer = pointNameDrawer,
       )
+    }
+
+    fun defaultLineDrawer(
+      closeLines: Boolean = true,
+    ): CalibrationDrawer {
+      return DefaultLineDrawer(closeLines = closeLines)
     }
   }
 }
@@ -46,7 +52,9 @@ private class DefaultDrawer(
   }
 }
 
-private class DefaultLineDrawer : CalibrationDrawer {
+private class DefaultLineDrawer(
+  private val closeLines: Boolean,
+) : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
     config: CalibrationConfig,
@@ -65,13 +73,24 @@ private class DefaultLineDrawer : CalibrationDrawer {
       }
       else -> {
         points.forEachIndexed { index, point ->
-          val end = points.getOrNull(index + 1) ?: points.first()
-          drawLine(
-            color = config.lineColor,
-            start = point.toComposeOffset(),
-            end = end.toComposeOffset(),
-            strokeWidth = config.lineWidth.toPx(),
-          )
+          val end = points.getOrNull(index + 1)
+          if (end != null) {
+            drawLine(
+              color = config.lineColor,
+              start = point.toComposeOffset(),
+              end = end.toComposeOffset(),
+              strokeWidth = config.lineWidth.toPx(),
+            )
+          } else {
+            if (closeLines) {
+              drawLine(
+                color = config.lineColor,
+                start = point.toComposeOffset(),
+                end = points.first().toComposeOffset(),
+                strokeWidth = config.lineWidth.toPx(),
+              )
+            }
+          }
         }
       }
     }
