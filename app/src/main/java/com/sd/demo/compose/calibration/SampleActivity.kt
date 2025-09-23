@@ -25,8 +25,8 @@ import com.sd.lib.compose.calibration.CalibrationDrawer
 import com.sd.lib.compose.calibration.CalibrationGroup
 import com.sd.lib.compose.calibration.CalibrationPoint
 import com.sd.lib.compose.calibration.CalibrationView
-import com.sd.lib.compose.calibration.withDrawer
 import com.sd.lib.compose.calibration.rememberCalibrationState
+import com.sd.lib.compose.calibration.withDrawer
 
 class SampleActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,10 +47,15 @@ private fun Content(
     val group1 = CalibrationGroup.create(Calibration.create(id = "1", points = getDefaultPoints("1", startX = 100f, startY = 100f)))
     val group2 = CalibrationGroup.create(
       Calibration
-        .create(id = "2", points = getDefaultPoints("2", startX = 500f, startY = 500f))
+        .create(id = "2", points = getDefaultPoints("2", startX = 300f, startY = 300f))
         .withDrawer(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
     )
-    listOf(group1, group2)
+    val group3 = CalibrationGroup.create(
+      Calibration
+        .create(id = "2", points = getLinePoints("2", startX = 500f, startY = 500f))
+        .withDrawer(CalibrationDrawer.create(lineDrawer = CalibrationDrawer.defaultLineDrawer(closeLines = false)))
+    )
+    listOf(group1, group2, group3)
   }
 
   val state = rememberCalibrationState(groups = groups)
@@ -77,13 +82,26 @@ private fun getDefaultPoints(
   group: String,
   startX: Float = 0f,
   startY: Float = 0f,
-  delta: Float = 200f,
+  deltaX: Float = 100f,
+  deltaY: Float = 100f,
 ): List<CalibrationPoint> {
   return listOf(
     CalibrationPoint.create("${listPointIndex[0]}${group}", startX, startY),
-    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + delta, startY),
-    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + delta, startY + delta),
-    CalibrationPoint.create("${listPointIndex[3]}${group}", startX, startY + delta),
+    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + deltaX, startY),
+    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + deltaX, startY + deltaY),
+    CalibrationPoint.create("${listPointIndex[3]}${group}", startX, startY + deltaY),
+  )
+}
+
+private fun getLinePoints(
+  group: String,
+  startX: Float = 0f,
+  startY: Float = 0f,
+): List<CalibrationPoint> {
+  return listOf(
+    CalibrationPoint.create("${listPointIndex[0]}${group}", startX, startY),
+    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + 100f, startY),
+    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + 100f, startY + 100f),
   )
 }
 
