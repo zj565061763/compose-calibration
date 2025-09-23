@@ -24,6 +24,7 @@ import com.sd.lib.compose.calibration.CalibrationConfig
 import com.sd.lib.compose.calibration.CalibrationDrawer
 import com.sd.lib.compose.calibration.CalibrationGroup
 import com.sd.lib.compose.calibration.CalibrationPoint
+import com.sd.lib.compose.calibration.CalibrationPointNamePosition
 import com.sd.lib.compose.calibration.CalibrationView
 import com.sd.lib.compose.calibration.rememberCalibrationState
 import com.sd.lib.compose.calibration.withDrawer
@@ -50,7 +51,12 @@ private fun Content(
       .withDrawer(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
 
     val calibration3 = Calibration.create(id = "3", points = getLinePoints("3", startX = 500f, startY = 500f))
-      .withDrawer(CalibrationDrawer.create(lineDrawer = CalibrationDrawer.defaultLineDrawer(closeLines = false)))
+      .withDrawer(
+        CalibrationDrawer.create(
+          lineDrawer = CalibrationDrawer.defaultLineDrawer(closeLines = false),
+          pointNameDrawer = CalibrationDrawer.defaultPointNameDrawer(CalibrationPointNamePosition.CenterEnd),
+        )
+      )
 
     listOf(
       CalibrationGroup.create(calibration1),
