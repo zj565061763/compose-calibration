@@ -1,6 +1,6 @@
 package com.sd.lib.compose.calibration
 
-fun Calibration.drawable(drawer: CalibrationDrawer): Calibration {
+fun Calibration.withDrawer(drawer: CalibrationDrawer): Calibration {
   return when (this) {
     is DrawableCalibrationImpl -> this.copy(drawer = drawer)
     else -> DrawableCalibrationImpl(

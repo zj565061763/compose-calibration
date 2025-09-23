@@ -25,7 +25,7 @@ import com.sd.lib.compose.calibration.CalibrationDrawer
 import com.sd.lib.compose.calibration.CalibrationGroup
 import com.sd.lib.compose.calibration.CalibrationPoint
 import com.sd.lib.compose.calibration.CalibrationView
-import com.sd.lib.compose.calibration.drawable
+import com.sd.lib.compose.calibration.withDrawer
 import com.sd.lib.compose.calibration.rememberCalibrationState
 
 class SampleActivity : ComponentActivity() {
@@ -48,7 +48,7 @@ private fun Content(
     val group2 = CalibrationGroup.create(
       Calibration
         .create(id = "2", points = getDefaultPoints("2", startX = 500f, startY = 500f))
-        .drawable(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
+        .withDrawer(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
     )
     listOf(group1, group2)
   }
