@@ -61,10 +61,7 @@ private fun Content(
       )
     }
 
-    listOf(
-      CalibrationGroup(getDefaultCalibrations()),
-      CalibrationGroup.create(customCalibration),
-    )
+    getDefaultCalibrationGroups() + CalibrationGroup.create(customCalibration)
   }
 
   val state = rememberCalibrationState(groups = groups)
@@ -102,11 +99,12 @@ private class CustomPointDrawer : CalibrationDrawer {
   }
 }
 
-private fun getDefaultCalibrations(): List<Calibration> {
+private fun getDefaultCalibrationGroups(): List<CalibrationGroup> {
   return getPercentRect(2, 4).let { groups ->
     groups.mapIndexed { groupIndex, groupItem ->
       val points = groupItem.mapIndexed { pointIndex, point -> CalibrationPoint.create("${listPointIndex[pointIndex]}${groupIndex + 1}", point.x, point.y) }
-      Calibration.create(groupIndex.toString(), points)
+      val calibration = Calibration.create(groupIndex.toString(), points)
+      CalibrationGroup.create(calibration)
     }
   }
 }
