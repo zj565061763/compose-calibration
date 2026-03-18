@@ -49,8 +49,8 @@ private fun Content(
     val customCalibration = run {
       val points = listOf(
         CalibrationPoint.create("${listPointIndex[0]}1", 0.5f, 0.5f),
-        CalibrationPoint.create("${listPointIndex[1]}2", 0.5f, 0.6f),
-        CalibrationPoint.create("${listPointIndex[2]}3", 0.5f, 0.7f),
+        CalibrationPoint.create("${listPointIndex[1]}1", 0.5f, 0.6f),
+        CalibrationPoint.create("${listPointIndex[2]}1", 0.5f, 0.7f),
       )
       Calibration.create(id = "custom", points = points).withDrawer(
         CalibrationDrawer.create(
