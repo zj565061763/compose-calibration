@@ -1,6 +1,7 @@
 package com.sd.lib.compose.calibration
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
@@ -78,8 +79,8 @@ private class DefaultLineDrawer(
       points.size == 2 -> {
         drawLine(
           color = config.lineColor,
-          start = points.first().toComposeOffset(),
-          end = points.last().toComposeOffset(),
+          start = points.first().toComposeOffset(size),
+          end = points.last().toComposeOffset(size),
           strokeWidth = config.lineWidth.toPx(),
         )
       }
@@ -89,16 +90,16 @@ private class DefaultLineDrawer(
           if (end != null) {
             drawLine(
               color = config.lineColor,
-              start = point.toComposeOffset(),
-              end = end.toComposeOffset(),
+              start = point.toComposeOffset(size),
+              end = end.toComposeOffset(size),
               strokeWidth = config.lineWidth.toPx(),
             )
           } else {
             if (closeLines) {
               drawLine(
                 color = config.lineColor,
-                start = point.toComposeOffset(),
-                end = points.first().toComposeOffset(),
+                start = point.toComposeOffset(size),
+                end = points.first().toComposeOffset(size),
                 strokeWidth = config.lineWidth.toPx(),
               )
             }
@@ -119,7 +120,7 @@ private class DefaultPointDrawer : CalibrationDrawer {
       drawCircle(
         color = config.pointColor,
         radius = config.pointSize.toPx() / 2f,
-        center = point.toComposeOffset(),
+        center = point.toComposeOffset(size),
       )
     }
   }
@@ -192,7 +193,7 @@ private class DefaultPointNameDrawer(
   ) {
     drawText(
       textLayoutResult = textLayoutResult,
-      topLeft = point.toComposeOffset(appendY = -textLayoutResult.size.height.toFloat() - (config.pointSize.toPx() / 2f)),
+      topLeft = point.toComposeOffset(size, appendY = -textLayoutResult.size.height.toFloat() - (config.pointSize.toPx() / 2f)),
     )
   }
 
@@ -203,7 +204,7 @@ private class DefaultPointNameDrawer(
   ) {
     drawText(
       textLayoutResult = textLayoutResult,
-      topLeft = point.toComposeOffset(appendY = config.pointSize.toPx() / 2f),
+      topLeft = point.toComposeOffset(size, appendY = config.pointSize.toPx() / 2f),
     )
   }
 
@@ -216,14 +217,19 @@ private class DefaultPointNameDrawer(
     val appendY = -textLayoutResult.size.height.toFloat() / 2f
     drawText(
       textLayoutResult = textLayoutResult,
-      topLeft = point.toComposeOffset(appendX = appendX, appendY = appendY),
+      topLeft = point.toComposeOffset(size, appendX = appendX, appendY = appendY),
     )
   }
 }
 
+/** 转换为Compose的Offset */
 fun CalibrationPoint.toComposeOffset(
+  containerSize: Size,
   appendX: Float = 0f,
   appendY: Float = 0f,
 ): Offset {
-  return Offset(x = x + appendX, y = y + appendY)
+  return Offset(
+    x = x * containerSize.width + appendX,
+    y = y * containerSize.height + appendY,
+  )
 }

@@ -19,22 +19,20 @@ fun rememberCalibrationState(
 class CalibrationState internal constructor(
   private val groups: List<CalibrationGroup>,
 ) {
-  private var _scaleX = 0f
-  private var _scaleY = 0f
+  private var _sourceSize = Size.Zero
 
   internal var stableGroups by mutableStateOf<List<CalibrationGroup>>(emptyList())
     private set
 
   fun getCurrentGroups(): List<CalibrationGroup> {
-    val scaleX = _scaleX.takeIf { it > 0f } ?: 1f
-    val scaleY = _scaleY.takeIf { it > 0f } ?: 1f
+    val sourceSize = _sourceSize
     return stableGroups.map { group ->
       val calibrations = group.calibrations.map { calibration ->
         val points = calibration.points.map { point ->
           CalibrationPoint.create(
             name = point.name,
-            x = point.x / scaleX,
-            y = point.y / scaleY,
+            x = point.x * sourceSize.width,
+            y = point.y * sourceSize.height,
           )
         }
         calibration.overridePoints(points = points)
@@ -44,24 +42,19 @@ class CalibrationState internal constructor(
   }
 
   internal fun setSize(viewSize: Size, sourceSize: Size) {
-    val scaleX = if (sourceSize.width > 0) viewSize.width / sourceSize.width else 1f
-    val scaleY = if (sourceSize.height > 0) viewSize.height / sourceSize.height else 1f
-    if (_scaleX != scaleX || _scaleY != scaleY) {
-      _scaleX = scaleX
-      _scaleY = scaleY
-      stableGroups = groups.map { it.toStableCalibrationGroup() }
-        .onEach { it.scalePoints(scaleX = scaleX, scaleY = scaleY) }
+    if (_sourceSize != sourceSize) {
+      _sourceSize = sourceSize
+      stableGroups = groups.map { group ->
+        val calibrations = group.calibrations.map { calibration ->
+          val points = calibration.points.map { point ->
+            val px = if (sourceSize.width > 0) point.x / sourceSize.width else 0f
+            val py = if (sourceSize.height > 0) point.y / sourceSize.height else 0f
+            point.toStablePoint().apply { (this as StablePoint).update(px, py) }
+          }
+          calibration.overridePoints(points = points)
+        }
+        group.copy(calibrations = calibrations)
+      }
     }
-  }
-}
-
-private fun CalibrationGroup.scalePoints(scaleX: Float, scaleY: Float) {
-  calibrations.forEach { it.scalePoints(scaleX = scaleX, scaleY = scaleY) }
-}
-
-private fun Calibration.scalePoints(scaleX: Float, scaleY: Float) {
-  points.forEach { point ->
-    check(point is StablePoint)
-    point.update(x = point.x * scaleX, y = point.y * scaleY)
   }
 }

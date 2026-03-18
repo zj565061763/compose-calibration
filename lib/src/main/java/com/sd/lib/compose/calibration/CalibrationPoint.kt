@@ -6,11 +6,19 @@ import androidx.compose.runtime.mutableFloatStateOf
 @Stable
 interface CalibrationPoint {
   val name: String
+  /** x坐标百分比[0-1] */
   val x: Float
+  /** y坐标百分比[0-1] */
   val y: Float
 
   companion object {
-    fun create(name: String, x: Float, y: Float): CalibrationPoint {
+    fun create(
+      name: String,
+      /** x坐标百分比[0-1] */
+      x: Float,
+      /** y坐标百分比[0-1] */
+      y: Float,
+    ): CalibrationPoint {
       return ImmutablePointImpl(name = name, x = x, y = y)
     }
   }

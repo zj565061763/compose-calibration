@@ -24,8 +24,6 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.toIntRect
 import androidx.compose.ui.unit.toSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -72,6 +70,7 @@ fun CalibrationView(
             findTouchedPoint(
               group = group,
               touched = down.position,
+              containerSize = size.toSize(),
               getConfig = { getConfigUpdated(it, null) },
             )
           }
@@ -82,6 +81,7 @@ fun CalibrationView(
               touchedPoint = findTouchedPoint(
                 group = group,
                 touched = down.position,
+                containerSize = size.toSize(),
                 getConfig = { getConfigUpdated(it, null) },
               )
               if (touchedPoint != null) {
@@ -99,13 +99,13 @@ fun CalibrationView(
           if (touchSlopChange == null) return@awaitEachGesture
 
           (touchSlopChange.position - down.position).also { initialDistance ->
-            touchedPoint.updateOffset(offset = initialDistance, bounds = size.toIntRect())
+            touchedPoint.updatePercentageOffset(offset = initialDistance, containerSize = size.toSize())
           }
 
           drag(touchSlopChange.id) { change ->
             val dragAmount = change.positionChange()
             change.consume()
-            touchedPoint.updateOffset(offset = dragAmount, bounds = size.toIntRect())
+            touchedPoint.updatePercentageOffset(offset = dragAmount, containerSize = size.toSize())
           }
         }
       }
@@ -148,11 +148,16 @@ private inline fun DrawScope.drawCalibrationGroup(
 private inline fun Density.findTouchedPoint(
   group: CalibrationGroup,
   touched: Offset,
+  containerSize: Size,
   getConfig: (Calibration) -> CalibrationConfig,
 ): CalibrationPoint? {
   return group.calibrations.firstNotNullOfOrNull { calibration ->
     val config = getConfig(calibration)
-    calibration.findTouchedPoint(touched = touched, touchedSize = config.pointTouchedSize.toPx())
+    calibration.findTouchedPoint(
+      touched = touched,
+      containerSize = containerSize,
+      touchedSize = config.pointTouchedSize.toPx(),
+    )
   }
 }
 
@@ -160,23 +165,27 @@ private inline fun Density.findTouchedPoint(
 private fun Calibration.findTouchedPoint(
   /** 触摸点 */
   touched: Offset,
+  /** 容器大小 */
+  containerSize: Size,
   /** 触摸点大小 */
   touchedSize: Float,
 ): CalibrationPoint? {
   return points.firstOrNull { point ->
-    Rect(center = Offset(point.x, point.y), radius = touchedSize / 2f).contains(touched)
+    val absoluteOffset = point.toComposeOffset(containerSize)
+    Rect(center = absoluteOffset, radius = touchedSize / 2f).contains(touched)
   }
 }
 
-/** 更新点的坐标 */
-private fun CalibrationPoint.updateOffset(
-  /** 偏移量 */
+/** 更新点的百分比坐标 */
+private fun CalibrationPoint.updatePercentageOffset(
+  /** 偏移量 (像素) */
   offset: Offset,
-  /** 限制范围 */
-  bounds: IntRect,
+  /** 容器大小 */
+  containerSize: Size,
 ) {
+  if (containerSize.width <= 0f || containerSize.height <= 0f) return
   require(this is StablePoint)
-  val newX = (x + offset.x).coerceIn(bounds.left.toFloat(), bounds.right.toFloat())
-  val newY = (y + offset.y).coerceIn(bounds.top.toFloat(), bounds.bottom.toFloat())
+  val newX = (x + offset.x / containerSize.width).coerceIn(0f, 1f)
+  val newY = (y + offset.y / containerSize.height).coerceIn(0f, 1f)
   update(x = newX, y = newY)
 }
