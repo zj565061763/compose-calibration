@@ -19,20 +19,15 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.toSize
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun CalibrationView(
   modifier: Modifier = Modifier,
   state: CalibrationState,
-  sourceSize: Size?,
   getConfig: (current: Calibration, selected: CalibrationGroup?) -> CalibrationConfig = { current, selected ->
     if (selected != null && selected.containsCalibration(current.id)) {
       CalibrationConfig.DefaultSelected
@@ -46,73 +41,56 @@ fun CalibrationView(
     selectedGroup = null
   }
 
-  var canvasSize by remember { mutableStateOf<Size?>(null) }
-  canvasSize?.also { size ->
-    LaunchedEffect(state, size, sourceSize) {
-      withContext(Dispatchers.Default) {
-        state.setSize(viewSize = size, sourceSize = sourceSize ?: size)
-      }
-    }
-  }
-
-  val inspectionMode = LocalInspectionMode.current
   val getConfigUpdated by rememberUpdatedState(getConfig)
   val textMeasurer = rememberTextMeasurer()
 
-  Canvas(
-    modifier = modifier
-      .onSizeChanged { canvasSize = it.toSize() }
-      .pointerInput(state) {
-        awaitEachGesture {
-          val down = awaitFirstDown()
+  Canvas(modifier = modifier.pointerInput(state) {
+    awaitEachGesture {
+      val down = awaitFirstDown()
 
-          var touchedPoint = selectedGroup?.let { group ->
-            findTouchedPoint(
-              group = group,
-              touched = down.position,
-              containerSize = size.toSize(),
-              getConfig = { getConfigUpdated(it, null) },
-            )
-          }
+      var touchedPoint = selectedGroup?.let { group ->
+        findTouchedPoint(
+          group = group,
+          touched = down.position,
+          containerSize = size.toSize(),
+          getConfig = { getConfigUpdated(it, null) },
+        )
+      }
 
-          if (touchedPoint == null) {
-            for (group in state.stableGroups) {
-              if (group == selectedGroup) continue
-              touchedPoint = findTouchedPoint(
-                group = group,
-                touched = down.position,
-                containerSize = size.toSize(),
-                getConfig = { getConfigUpdated(it, null) },
-              )
-              if (touchedPoint != null) {
-                selectedGroup = group
-                break
-              }
-            }
-          }
-
-          if (touchedPoint == null) {
-            return@awaitEachGesture
-          }
-
-          val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
-          if (touchSlopChange == null) return@awaitEachGesture
-
-          (touchSlopChange.position - down.position).also { initialDistance ->
-            touchedPoint.updatePercentageOffset(offset = initialDistance, containerSize = size.toSize())
-          }
-
-          drag(touchSlopChange.id) { change ->
-            val dragAmount = change.positionChange()
-            change.consume()
-            touchedPoint.updatePercentageOffset(offset = dragAmount, containerSize = size.toSize())
+      if (touchedPoint == null) {
+        for (group in state.stableGroups) {
+          if (group == selectedGroup) continue
+          touchedPoint = findTouchedPoint(
+            group = group,
+            touched = down.position,
+            containerSize = size.toSize(),
+            getConfig = { getConfigUpdated(it, null) },
+          )
+          if (touchedPoint != null) {
+            selectedGroup = group
+            break
           }
         }
       }
-  ) {
-    if (inspectionMode) {
-      state.setSize(viewSize = size, sourceSize = sourceSize ?: size)
+
+      if (touchedPoint == null) {
+        return@awaitEachGesture
+      }
+
+      val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
+      if (touchSlopChange == null) return@awaitEachGesture
+
+      (touchSlopChange.position - down.position).also { initialDistance ->
+        touchedPoint.updatePercentageOffset(offset = initialDistance, containerSize = size.toSize())
+      }
+
+      drag(touchSlopChange.id) { change ->
+        val dragAmount = change.positionChange()
+        change.consume()
+        touchedPoint.updatePercentageOffset(offset = dragAmount, containerSize = size.toSize())
+      }
     }
+  }) {
     for (group in state.stableGroups) {
       if (group == selectedGroup) continue
       drawCalibrationGroup(

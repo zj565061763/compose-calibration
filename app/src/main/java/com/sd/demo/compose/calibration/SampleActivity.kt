@@ -27,6 +27,7 @@ import com.sd.lib.compose.calibration.CalibrationPoint
 import com.sd.lib.compose.calibration.CalibrationPointNamePosition
 import com.sd.lib.compose.calibration.CalibrationView
 import com.sd.lib.compose.calibration.rememberCalibrationState
+import com.sd.lib.compose.calibration.toComposeOffset
 import com.sd.lib.compose.calibration.withDrawer
 
 class SampleActivity : ComponentActivity() {
@@ -45,23 +46,26 @@ private fun Content(
   modifier: Modifier = Modifier,
 ) {
   val groups = remember {
-    val calibration1 = Calibration.create(id = "1", points = getDefaultPoints("1", startX = 100f, startY = 100f))
+    val calibration1 = Calibration.create(id = "1", points = getDefaultPoints("1", startX = 0.1f, startY = 0.1f))
 
-    val calibration2 = Calibration.create(id = "2", points = getDefaultPoints("2", startX = 300f, startY = 300f))
-      .withDrawer(CalibrationDrawer.create(pointDrawer = CustomPointDrawer()))
-
-    val calibration3 = Calibration.create(id = "3", points = getLinePoints("3", startX = 500f, startY = 500f))
-      .withDrawer(
+    val calibration2 = run {
+      val points = listOf(
+        CalibrationPoint.create("${listPointIndex[0]}3", 0.5f, 0.5f),
+        CalibrationPoint.create("${listPointIndex[1]}3", 0.5f, 0.6f),
+        CalibrationPoint.create("${listPointIndex[2]}3", 0.5f, 0.7f),
+      )
+      Calibration.create(id = "3", points = points).withDrawer(
         CalibrationDrawer.create(
           lineDrawer = CalibrationDrawer.defaultLineDrawer(closeLines = false),
+          pointDrawer = CustomPointDrawer(),
           pointNameDrawer = CalibrationDrawer.defaultPointNameDrawer(CalibrationPointNamePosition.CenterEnd),
         )
       )
+    }
 
     listOf(
       CalibrationGroup.create(calibration1),
       CalibrationGroup.create(calibration2),
-      CalibrationGroup.create(calibration3),
     )
   }
 
@@ -77,8 +81,6 @@ private fun Content(
         .aspectRatio(1f)
         .background(Color.Black),
       state = state,
-      sourceSize = null,
-//      sourceSize = Size(2000f, 2000f),
     )
   }
 }
@@ -89,26 +91,14 @@ private fun getDefaultPoints(
   group: String,
   startX: Float = 0f,
   startY: Float = 0f,
-  deltaX: Float = 100f,
-  deltaY: Float = 100f,
+  deltaX: Float = 0.1f,
+  deltaY: Float = 0.1f,
 ): List<CalibrationPoint> {
   return listOf(
     CalibrationPoint.create("${listPointIndex[0]}${group}", startX, startY),
     CalibrationPoint.create("${listPointIndex[1]}${group}", startX + deltaX, startY),
     CalibrationPoint.create("${listPointIndex[2]}${group}", startX + deltaX, startY + deltaY),
     CalibrationPoint.create("${listPointIndex[3]}${group}", startX, startY + deltaY),
-  )
-}
-
-private fun getLinePoints(
-  group: String,
-  startX: Float = 0f,
-  startY: Float = 0f,
-): List<CalibrationPoint> {
-  return listOf(
-    CalibrationPoint.create("${listPointIndex[0]}${group}", startX, startY),
-    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + 100f, startY + 100f),
-    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + 200f, startY + 200f),
   )
 }
 
@@ -122,7 +112,7 @@ private class CustomPointDrawer : CalibrationDrawer {
       val pointSizePX = config.pointSize.toPx()
       drawRect(
         color = config.pointColor,
-        topLeft = Offset(point.x - pointSizePX / 2f, point.y - pointSizePX / 2f),
+        topLeft = point.toComposeOffset(size) - Offset(pointSizePX / 2f, pointSizePX / 2f),
         size = Size(pointSizePX, pointSizePX),
       )
     }
