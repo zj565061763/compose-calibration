@@ -24,13 +24,7 @@ class CalibrationState internal constructor() {
   internal fun Init(groups: List<CalibrationGroup>) {
     LaunchedEffect(groups) {
       withContext(Dispatchers.Default) {
-        stableGroups = groups.map { group ->
-          val calibrations = group.calibrations.map { calibration ->
-            val points = calibration.points.map { it.toStablePoint() }
-            calibration.overridePoints(points = points)
-          }
-          group.copy(calibrations = calibrations)
-        }
+        stableGroups = groups.map { it.toStableCalibrationGroup() }
       }
     }
   }
