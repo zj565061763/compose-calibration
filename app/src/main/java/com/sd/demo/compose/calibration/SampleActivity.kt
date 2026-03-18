@@ -100,7 +100,7 @@ private class CustomPointDrawer : CalibrationDrawer {
 }
 
 private fun getDefaultCalibrationGroups(): List<CalibrationGroup> {
-  return getPercentRect(2, 4).let { groups ->
+  return getPercentRect(totalCount = 8, columnCount = 4).let { groups ->
     groups.mapIndexed { groupIndex, groupItem ->
       val points = groupItem.mapIndexed { pointIndex, point -> CalibrationPoint.create("${listPointIndex[pointIndex]}${groupIndex + 1}", point.x, point.y) }
       val calibration = Calibration.create(groupIndex.toString(), points)
@@ -109,14 +109,21 @@ private fun getDefaultCalibrationGroups(): List<CalibrationGroup> {
   }
 }
 
-private fun getPercentRect(rowCount: Int, columnCount: Int): List<List<Offset>> {
-  require(rowCount > 0 && columnCount > 0)
+private fun getPercentRect(
+  totalCount: Int,
+  columnCount: Int,
+): List<List<Offset>> {
+  require(totalCount > 0 && columnCount > 0)
+  val rowCount = (totalCount + columnCount - 1) / columnCount
   val cellWidth = 1f / (2 * columnCount + 1)
   val cellHeight = 1f / (2 * rowCount + 1)
   val result = mutableListOf<List<Offset>>()
+  var index = 0
   for (row in 0 until rowCount) {
-    for (col in 0 until columnCount) {
-      val left = (2 * col + 1) * cellWidth
+    val remaining = totalCount - index
+    val currentRowCount = minOf(columnCount, remaining)
+    for (col in 0 until currentRowCount) {
+      val left = cellWidth + col * 2 * cellWidth
       val top = (2 * row + 1) * cellHeight
       val right = left + cellWidth
       val bottom = top + cellHeight
@@ -127,6 +134,8 @@ private fun getPercentRect(rowCount: Int, columnCount: Int): List<List<Offset>> 
         Offset(left, bottom),
       )
       result.add(rect)
+      index++
+      if (index >= totalCount) break
     }
   }
   return result
