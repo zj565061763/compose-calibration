@@ -183,8 +183,8 @@ private fun CalibrationPoint.updatePercentageOffset(
   /** 容器大小 */
   containerSize: Size,
 ) {
-  if (containerSize.width <= 0f || containerSize.height <= 0f) return
   require(this is StablePoint)
+  if (containerSize.width <= 0f || containerSize.height <= 0f) return
   val newX = (x + offset.x / containerSize.width).coerceIn(0f, 1f)
   val newY = (y + offset.y / containerSize.height).coerceIn(0f, 1f)
   update(x = newX, y = newY)
