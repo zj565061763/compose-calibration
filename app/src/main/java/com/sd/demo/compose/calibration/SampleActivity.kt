@@ -46,15 +46,13 @@ private fun Content(
   modifier: Modifier = Modifier,
 ) {
   val groups = remember {
-    val calibration1 = Calibration.create(id = "1", points = getDefaultPoints("1", startX = 0.1f, startY = 0.1f))
-
-    val calibration2 = run {
+    val customCalibration = run {
       val points = listOf(
-        CalibrationPoint.create("${listPointIndex[0]}3", 0.5f, 0.5f),
-        CalibrationPoint.create("${listPointIndex[1]}3", 0.5f, 0.6f),
+        CalibrationPoint.create("${listPointIndex[0]}1", 0.5f, 0.5f),
+        CalibrationPoint.create("${listPointIndex[1]}2", 0.5f, 0.6f),
         CalibrationPoint.create("${listPointIndex[2]}3", 0.5f, 0.7f),
       )
-      Calibration.create(id = "3", points = points).withDrawer(
+      Calibration.create(id = "custom", points = points).withDrawer(
         CalibrationDrawer.create(
           lineDrawer = CalibrationDrawer.defaultLineDrawer(closeLines = false),
           pointDrawer = CustomPointDrawer(),
@@ -64,8 +62,8 @@ private fun Content(
     }
 
     listOf(
-      CalibrationGroup.create(calibration1),
-      CalibrationGroup.create(calibration2),
+      CalibrationGroup(getDefaultCalibrations()),
+      CalibrationGroup.create(customCalibration),
     )
   }
 
@@ -87,21 +85,6 @@ private fun Content(
 
 private val listPointIndex = listOf("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N")
 
-private fun getDefaultPoints(
-  group: String,
-  startX: Float = 0f,
-  startY: Float = 0f,
-  deltaX: Float = 0.1f,
-  deltaY: Float = 0.1f,
-): List<CalibrationPoint> {
-  return listOf(
-    CalibrationPoint.create("${listPointIndex[0]}${group}", startX, startY),
-    CalibrationPoint.create("${listPointIndex[1]}${group}", startX + deltaX, startY),
-    CalibrationPoint.create("${listPointIndex[2]}${group}", startX + deltaX, startY + deltaY),
-    CalibrationPoint.create("${listPointIndex[3]}${group}", startX, startY + deltaY),
-  )
-}
-
 private class CustomPointDrawer : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
@@ -117,6 +100,38 @@ private class CustomPointDrawer : CalibrationDrawer {
       )
     }
   }
+}
+
+private fun getDefaultCalibrations(): List<Calibration> {
+  return getPercentRect(2, 4).let { groups ->
+    groups.mapIndexed { groupIndex, groupItem ->
+      val points = groupItem.mapIndexed { pointIndex, point -> CalibrationPoint.create("${listPointIndex[pointIndex]}${groupIndex + 1}", point.x, point.y) }
+      Calibration.create(groupIndex.toString(), points)
+    }
+  }
+}
+
+private fun getPercentRect(rowCount: Int, columnCount: Int): List<List<Offset>> {
+  require(rowCount > 0 && columnCount > 0)
+  val cellWidth = 1f / (2 * columnCount + 1)
+  val cellHeight = 1f / (2 * rowCount + 1)
+  val result = mutableListOf<List<Offset>>()
+  for (row in 0 until rowCount) {
+    for (col in 0 until columnCount) {
+      val left = (2 * col + 1) * cellWidth
+      val top = (2 * row + 1) * cellHeight
+      val right = left + cellWidth
+      val bottom = top + cellHeight
+      val rect = listOf(
+        Offset(left, top),
+        Offset(right, top),
+        Offset(right, bottom),
+        Offset(left, bottom),
+      )
+      result.add(rect)
+    }
+  }
+  return result
 }
 
 @Preview
