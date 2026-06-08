@@ -54,7 +54,7 @@ fun CalibrationView(
       }
 
       if (touchedPoint == null) {
-        for (group in state.stableGroups) {
+        for (group in state.stableGroups.asReversed()) {
           if (group == selectedGroup) continue
           touchedPoint = findTouchedPoint(
             group = group,
