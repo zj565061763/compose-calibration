@@ -2,6 +2,7 @@ package com.sd.lib.compose.calibration
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.snapshots.Snapshot
 
 @Stable
 interface CalibrationPoint {
@@ -61,16 +62,18 @@ private class StablePointImpl(
     if (this === other) return true
     if (other !is CalibrationPoint) return false
     if (name != other.name) return false
-    if (x != other.x) return false
-    if (y != other.y) return false
-    return true
+    return Snapshot.withoutReadObservation {
+      x == other.x && y == other.y
+    }
   }
 
   override fun hashCode(): Int {
-    var result = name.hashCode()
-    result = 31 * result + x.hashCode()
-    result = 31 * result + y.hashCode()
-    return result
+    return Snapshot.withoutReadObservation {
+      var result = name.hashCode()
+      result = 31 * result + x.hashCode()
+      result = 31 * result + y.hashCode()
+      result
+    }
   }
 }
 
