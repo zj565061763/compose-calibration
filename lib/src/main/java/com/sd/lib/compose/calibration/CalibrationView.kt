@@ -6,7 +6,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,10 +35,7 @@ fun CalibrationView(
     }
   },
 ) {
-  var selectedGroup by remember { mutableStateOf<CalibrationGroup?>(null) }
-  LaunchedEffect(state) {
-    selectedGroup = null
-  }
+  var selectedGroup by remember(state) { mutableStateOf<CalibrationGroup?>(null) }
 
   val getConfigUpdated by rememberUpdatedState(getConfig)
   val textMeasurer = rememberTextMeasurer()
@@ -53,7 +49,7 @@ fun CalibrationView(
           group = group,
           touched = down.position,
           containerSize = size.toSize(),
-          getConfig = { getConfigUpdated(it, null) },
+          getConfig = { getConfigUpdated(it, selectedGroup) },
         )
       }
 
@@ -64,7 +60,7 @@ fun CalibrationView(
             group = group,
             touched = down.position,
             containerSize = size.toSize(),
-            getConfig = { getConfigUpdated(it, null) },
+            getConfig = { getConfigUpdated(it, selectedGroup) },
           )
           if (touchedPoint != null) {
             selectedGroup = group

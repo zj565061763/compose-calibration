@@ -228,6 +228,7 @@ fun CalibrationPoint.toComposeOffset(
   appendX: Float = 0f,
   appendY: Float = 0f,
 ): Offset {
+  if (containerSize.width <= 0f || containerSize.height <= 0f) return Offset.Zero
   return Offset(
     x = x * containerSize.width + appendX,
     y = y * containerSize.height + appendY,
