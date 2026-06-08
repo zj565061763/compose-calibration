@@ -28,7 +28,7 @@ internal interface StablePoint : CalibrationPoint {
   fun update(x: Float, y: Float)
 }
 
-internal fun CalibrationPoint.toStablePoint(): CalibrationPoint {
+internal fun CalibrationPoint.asStablePoint(): CalibrationPoint {
   if (this is StablePoint) return this
   return StablePointImpl(name = name, x = x, y = y)
 }

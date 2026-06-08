@@ -13,7 +13,7 @@ fun rememberCalibrationState(
 class CalibrationState internal constructor(
   groups: List<CalibrationGroup>,
 ) {
-  internal val stableGroups: List<CalibrationGroup> = groups.map { it.toStableCalibrationGroup() }
+  internal val stableGroups: List<CalibrationGroup> = groups.map { it.asStableCalibrationGroup() }
 
   /** 获取当前的标定组 (坐标为百分比) */
   fun getCurrentGroups(): List<CalibrationGroup> {
