@@ -19,7 +19,11 @@ interface CalibrationPoint {
       /** y坐标百分比[0-1] */
       y: Float,
     ): CalibrationPoint {
-      return ImmutablePointImpl(name = name, x = x, y = y)
+      return ImmutablePointImpl(
+        name = name,
+        x = x.coerceIn(0f, 1f),
+        y = y.coerceIn(0f, 1f),
+      )
     }
   }
 }
@@ -30,7 +34,11 @@ internal interface StablePoint : CalibrationPoint {
 
 internal fun CalibrationPoint.asStablePoint(): CalibrationPoint {
   if (this is StablePoint) return this
-  return StablePointImpl(name = name, x = x, y = y)
+  return StablePointImpl(
+    name = name,
+    x = x.coerceIn(0f, 1f),
+    y = y.coerceIn(0f, 1f),
+  )
 }
 
 private class StablePointImpl(
@@ -45,8 +53,24 @@ private class StablePointImpl(
   override val y: Float get() = _yState.floatValue
 
   override fun update(x: Float, y: Float) {
-    _xState.floatValue = x
-    _yState.floatValue = y
+    _xState.floatValue = x.coerceIn(0f, 1f)
+    _yState.floatValue = y.coerceIn(0f, 1f)
+  }
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is CalibrationPoint) return false
+    if (name != other.name) return false
+    if (x != other.x) return false
+    if (y != other.y) return false
+    return true
+  }
+
+  override fun hashCode(): Int {
+    var result = name.hashCode()
+    result = 31 * result + x.hashCode()
+    result = 31 * result + y.hashCode()
+    return result
   }
 }
 
