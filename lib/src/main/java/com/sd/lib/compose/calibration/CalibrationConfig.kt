@@ -12,7 +12,7 @@ data class CalibrationConfig(
   val lineWidth: Dp = 2.dp,
   val pointColor: Color = lineColor,
   val pointSize: Dp = 8.dp,
-  val pointTouchedSize: Dp = pointSize * 3f,
+  val pointTouchedSize: Dp = pointSize * 4f,
   val pointNameStyle: TextStyle = TextStyle(color = pointColor),
 ) {
   companion object {
