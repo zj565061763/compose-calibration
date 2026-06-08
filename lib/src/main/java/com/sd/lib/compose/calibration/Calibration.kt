@@ -42,11 +42,3 @@ private data class ImmutableCalibrationImpl(
     return copy(points = points ?: this.points)
   }
 }
-
-internal fun CalibrationGroup.asStableCalibrationGroup(): CalibrationGroup {
-  return copy(calibrations = calibrations.map { it.asStableCalibration() })
-}
-
-private fun Calibration.asStableCalibration(): Calibration {
-  return overridePoints(points = points.map { it.asStablePoint() })
-}

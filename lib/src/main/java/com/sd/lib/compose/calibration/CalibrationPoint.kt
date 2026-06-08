@@ -33,15 +33,6 @@ internal interface StablePoint : CalibrationPoint {
   fun update(x: Float, y: Float)
 }
 
-internal fun CalibrationPoint.asStablePoint(): CalibrationPoint {
-  if (this is StablePoint) return this
-  return StablePointImpl(
-    name = name,
-    x = x.coerceIn(0f, 1f),
-    y = y.coerceIn(0f, 1f),
-  )
-}
-
 private class StablePointImpl(
   override val name: String,
   x: Float,
@@ -82,3 +73,20 @@ private data class ImmutablePointImpl(
   override val x: Float,
   override val y: Float,
 ) : CalibrationPoint
+
+internal fun CalibrationGroup.asStableCalibrationGroup(): CalibrationGroup {
+  return copy(calibrations = calibrations.map { it.asStableCalibration() })
+}
+
+private fun Calibration.asStableCalibration(): Calibration {
+  return overridePoints(points = points.map { it.asStablePoint() })
+}
+
+private fun CalibrationPoint.asStablePoint(): CalibrationPoint {
+  if (this is StablePoint) return this
+  return StablePointImpl(
+    name = name,
+    x = x.coerceIn(0f, 1f),
+    y = y.coerceIn(0f, 1f),
+  )
+}
