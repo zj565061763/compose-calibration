@@ -37,7 +37,7 @@ fun CalibrationView(
 ) {
   var selectedGroup by remember(state) { mutableStateOf<CalibrationGroup?>(null) }
 
-  val getConfigUpdated by rememberUpdatedState(getConfig)
+  val getConfigState = rememberUpdatedState(getConfig)
   val textMeasurer = rememberTextMeasurer()
 
   Canvas(modifier = modifier.pointerInput(state) {
@@ -49,7 +49,7 @@ fun CalibrationView(
           group = group,
           touched = down.position,
           containerSize = size.toSize(),
-          getConfig = { getConfigUpdated(it, selectedGroup) },
+          getConfig = { getConfigState.value(it, selectedGroup) },
         )
       }
 
@@ -60,7 +60,7 @@ fun CalibrationView(
             group = group,
             touched = down.position,
             containerSize = size.toSize(),
-            getConfig = { getConfigUpdated(it, selectedGroup) },
+            getConfig = { getConfigState.value(it, selectedGroup) },
           )
           if (touchedPoint != null) {
             selectedGroup = group
@@ -91,14 +91,14 @@ fun CalibrationView(
       if (group === selectedGroup) continue
       drawCalibrationGroup(
         group = group,
-        getConfig = { getConfig(it, selectedGroup) },
+        getConfig = { getConfigState.value(it, selectedGroup) },
         textMeasurer = textMeasurer,
       )
     }
     selectedGroup?.also { group ->
       drawCalibrationGroup(
         group = group,
-        getConfig = { getConfig(it, selectedGroup) },
+        getConfig = { getConfigState.value(it, selectedGroup) },
         textMeasurer = textMeasurer,
       )
     }
