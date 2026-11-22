@@ -8,7 +8,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.snapshots.Snapshot
 
 /**
  * 创建并记住支持导航返回、配置变更与进程重建保活的[CalibrationState]
@@ -71,18 +70,20 @@ class CalibrationState(
   /** 更新标定组列表，自动将坐标限制在 `[0f, 1f]` 范围内 */
   fun setGroups(groups: List<CalibrationGroup>) {
     val normalized = groups.normalized()
-    val currentGroups = Snapshot.withoutReadObservation { _groupsState.value }
+    val currentGroups = _groupsState.value
     if (normalized == currentGroups) {
       return
     }
-    val previousIndex = Snapshot.withoutReadObservation { _selectedGroupIndexState.intValue }
-    val previousSelectedIds = currentGroups.getOrNull(previousIndex)?.calibrationIds()?.takeIf { it.isNotEmpty() }
+    val previousSelectedIds = currentGroups
+      .getOrNull(_selectedGroupIndexState.intValue)
+      ?.calibrationIds()
+      ?.takeIf { it.isNotEmpty() }
     _groupsState.value = normalized
     _renderGroupsState.value = normalized.map { it.toRenderGroup() }
-    _selectedGroupIndexState.intValue = when {
-      previousSelectedIds == null -> -1
-      normalized.getOrNull(previousIndex)?.calibrationIds() == previousSelectedIds -> previousIndex
-      else -> normalized.indexOfFirst { it.calibrationIds() == previousSelectedIds }
+    _selectedGroupIndexState.intValue = if (previousSelectedIds == null) {
+      -1
+    } else {
+      normalized.indexOfFirst { it.calibrationIds() == previousSelectedIds }
     }
   }
 
@@ -97,13 +98,11 @@ class CalibrationState(
 
   /** 提交指定[expectedRenderGroups]的手势修改，坐标有实际变化时更新[groups]并返回新快照 */
   internal fun commitDrag(expectedRenderGroups: List<RenderGroup>): List<CalibrationGroup>? {
-    val currentRenderGroups = Snapshot.withoutReadObservation { _renderGroupsState.value }
+    val currentRenderGroups = _renderGroupsState.value
     if (expectedRenderGroups !== currentRenderGroups) {
       return null
     }
-    val updated = Snapshot.withoutReadObservation {
-      currentRenderGroups.map { it.toCalibrationGroup() }
-    }
+    val updated = currentRenderGroups.map { it.toCalibrationGroup() }
     if (updated == _groupsState.value) {
       return null
     }
@@ -121,12 +120,9 @@ class CalibrationState(
     /** 用于保存和恢复[CalibrationState]的通用[Saver] */
     val Saver: Saver<CalibrationState, Any> = Saver(
       save = { state ->
-        val currentSnapshot = Snapshot.withoutReadObservation {
-          state.renderGroups.map { it.toCalibrationGroup() }
-        }
         arrayListOf<Any>(
-          serializeGroups(currentSnapshot),
-          Snapshot.withoutReadObservation { state.selectedGroupIndex },
+          serializeGroups(state.groups),
+          state.selectedGroupIndex,
         )
       },
       restore = { raw ->

@@ -4,19 +4,10 @@ import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.AwaitPointerEventScope
-import androidx.compose.ui.input.pointer.PointerEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerId
-import androidx.compose.ui.input.pointer.PointerInputChange
-import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.EmptyCoroutineContext
-import kotlin.coroutines.startCoroutine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -120,20 +111,6 @@ class CalibrationStateTest {
     state.setGroups(listOf(otherSlot))
     assertEquals(-1, state.selectedGroupIndex)
     assertNull(state.selectedGroup)
-  }
-
-  @Test
-  fun setGroupsKeepsExactSelectedIndexWhenDuplicateCalibrationIdsExist() {
-    val dup0 = CalibrationGroup.create(Calibration.create("roi", listOf(CalibrationPoint.create("A", 0.1f, 0.1f))))
-    val dup1 = CalibrationGroup.create(Calibration.create("roi", listOf(CalibrationPoint.create("B", 0.2f, 0.2f))))
-    val state = CalibrationState(initialGroups = listOf(dup0, dup1))
-    state.selectGroup(1)
-
-    val updatedDup1 = CalibrationGroup.create(Calibration.create("roi", listOf(CalibrationPoint.create("B", 0.6f, 0.6f))))
-    state.setGroups(listOf(dup0, updatedDup1))
-
-    assertEquals(1, state.selectedGroupIndex)
-    assertEquals(0.6f, state.selectedGroup?.calibrations?.single()?.points?.single()?.x ?: -1f, 0f)
   }
 
   @Test
@@ -381,187 +358,12 @@ class CalibrationStateTest {
       ),
     )
   }
-
-  @Test
-  fun singlePointerDragStopsWhenPrimaryPointerLiftsWithoutHandingOffToSecondaryPointer() {
-    val primaryId = PointerId(1L)
-    val secondaryId = PointerId(2L)
-    val downPos = Offset(800f, 200f)
-
-    // 1. 主指针未过阈值即抬起时，即使副指针按住移动也不接管
-    val cancelledScope = FakeAwaitPointerEventScope(
-      initialEvent = PointerEvent(
-        listOf(
-          pointerChange(id = primaryId, pos = downPos, prevPos = downPos, pressed = true, prevPressed = false),
-          pointerChange(id = secondaryId, pos = Offset(50f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = false),
-        ),
-      ),
-      upcomingEvents = listOf(
-        PointerEvent(
-          listOf(
-            pointerChange(id = primaryId, pos = downPos, prevPos = downPos, pressed = false, prevPressed = true),
-            pointerChange(id = secondaryId, pos = Offset(120f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = true),
-          ),
-        ),
-      ),
-    )
-    var slopResult: PointerInputChange? = null
-    cancelledScope.runBlock {
-      slopResult = awaitTouchSlopForPointer(pointerId = primaryId, downPosition = downPos)
-    }
-    assertNull(slopResult)
-
-    // 2. 主指针跨越阈值并拖动后松手，副指针仍按住移动时立即停止且不跳位
-    val dragScope = FakeAwaitPointerEventScope(
-      initialEvent = PointerEvent(
-        listOf(
-          pointerChange(id = primaryId, pos = downPos, prevPos = downPos, pressed = true, prevPressed = false),
-          pointerChange(id = secondaryId, pos = Offset(50f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = false),
-        ),
-      ),
-      upcomingEvents = listOf(
-        PointerEvent(
-          listOf(
-            pointerChange(id = primaryId, pos = Offset(820f, 200f), prevPos = downPos, pressed = true, prevPressed = true),
-            pointerChange(id = secondaryId, pos = Offset(50f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = true),
-          ),
-        ),
-        PointerEvent(
-          listOf(
-            pointerChange(id = primaryId, pos = Offset(850f, 210f), prevPos = Offset(820f, 200f), pressed = true, prevPressed = true),
-            pointerChange(id = secondaryId, pos = Offset(55f, 805f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = true),
-          ),
-        ),
-        PointerEvent(
-          listOf(
-            pointerChange(id = primaryId, pos = Offset(850f, 210f), prevPos = Offset(850f, 210f), pressed = false, prevPressed = true),
-            pointerChange(id = secondaryId, pos = Offset(60f, 810f), prevPos = Offset(55f, 805f), pressed = true, prevPressed = true),
-          ),
-        ),
-        PointerEvent(
-          listOf(
-            pointerChange(id = secondaryId, pos = Offset(100f, 850f), prevPos = Offset(60f, 810f), pressed = true, prevPressed = true),
-          ),
-        ),
-      ),
-    )
-
-    val recordedPositions = mutableListOf<Offset>()
-    dragScope.runBlock {
-      val slopChange = awaitTouchSlopForPointer(pointerId = primaryId, downPosition = downPos)
-      assertNotNull(slopChange)
-      recordedPositions.add(slopChange!!.position)
-      dragPointer(primaryId) { change ->
-        change.consume()
-        recordedPositions.add(change.position)
-      }
-    }
-
-    assertEquals(
-      listOf(Offset(820f, 200f), Offset(850f, 210f)),
-      recordedPositions,
-    )
-  }
 }
 
 private object BundleCompatibleSaverScope : SaverScope {
   override fun canBeSaved(value: Any): Boolean {
     return isBundleCompatible(value)
   }
-}
-
-private class FakeAwaitPointerEventScope(
-  initialEvent: PointerEvent,
-  upcomingEvents: List<PointerEvent>,
-) : AwaitPointerEventScope {
-  private val _events = ArrayDeque(upcomingEvents)
-  private var _currentEvent: PointerEvent = initialEvent
-
-  override val density: Float
-    get() {
-      return 1f
-    }
-
-  override val fontScale: Float
-    get() {
-      return 1f
-    }
-
-  override val size: IntSize
-    get() {
-      return IntSize(1000, 1000)
-    }
-
-  override val currentEvent: PointerEvent
-    get() {
-      return _currentEvent
-    }
-
-  override val viewConfiguration: ViewConfiguration = object : ViewConfiguration {
-    override val longPressTimeoutMillis: Long
-      get() {
-        return 500L
-      }
-
-    override val doubleTapTimeoutMillis: Long
-      get() {
-        return 300L
-      }
-
-    override val doubleTapMinTimeMillis: Long
-      get() {
-        return 40L
-      }
-
-    override val touchSlop: Float
-      get() {
-        return 10f
-      }
-  }
-
-  override suspend fun awaitPointerEvent(pass: PointerEventPass): PointerEvent {
-    if (pass == PointerEventPass.Main && _events.isNotEmpty()) {
-      _currentEvent = _events.removeFirst()
-    }
-    return _currentEvent
-  }
-
-  fun runBlock(block: suspend AwaitPointerEventScope.() -> Unit) {
-    var failure: Throwable? = null
-    block.startCoroutine(
-      receiver = this,
-      completion = object : Continuation<Unit> {
-        override val context: kotlin.coroutines.CoroutineContext
-          get() {
-            return EmptyCoroutineContext
-          }
-
-        override fun resumeWith(result: Result<Unit>) {
-          failure = result.exceptionOrNull()
-        }
-      },
-    )
-    failure?.also { throw it }
-  }
-}
-
-private fun pointerChange(
-  id: PointerId,
-  pos: Offset,
-  prevPos: Offset,
-  pressed: Boolean,
-  prevPressed: Boolean,
-): PointerInputChange {
-  return PointerInputChange(
-    id = id,
-    uptimeMillis = 100L,
-    position = pos,
-    pressed = pressed,
-    previousUptimeMillis = 50L,
-    previousPosition = prevPos,
-    previousPressed = prevPressed,
-    isInitiallyConsumed = false,
-  )
 }
 
 private fun createRectGroups(
