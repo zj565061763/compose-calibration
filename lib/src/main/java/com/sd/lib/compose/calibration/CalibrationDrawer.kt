@@ -7,7 +7,9 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 
+/** 标定绘制器 */
 fun interface CalibrationDrawer {
+  /** 绘制单个[calibration] */
   fun DrawScope.draw(
     calibration: Calibration,
     config: CalibrationConfig,
@@ -15,11 +17,13 @@ fun interface CalibrationDrawer {
   )
 
   companion object {
-    internal val DefaultDrawer: CalibrationDrawer = create()
+    /** 默认标定绘制器 */
+    val Default: CalibrationDrawer = create()
 
+    /** 组合连线、标定点与点名称绘制器 */
     fun create(
       lineDrawer: CalibrationDrawer = defaultLineDrawer(),
-      pointDrawer: CalibrationDrawer = DefaultPointDrawer(),
+      pointDrawer: CalibrationDrawer = DefaultPointDrawer,
       pointNameDrawer: CalibrationDrawer = defaultPointNameDrawer(),
     ): CalibrationDrawer {
       return DefaultDrawer(
@@ -29,12 +33,14 @@ fun interface CalibrationDrawer {
       )
     }
 
+    /** 创建默认连线绘制器，[closeLines]控制点数超过 2 个时是否首尾闭合 */
     fun defaultLineDrawer(
       closeLines: Boolean = true,
     ): CalibrationDrawer {
       return DefaultLineDrawer(closeLines = closeLines)
     }
 
+    /** 创建默认标定点名称绘制器，[position]为 `null` 时按索引上下分布 */
     fun defaultPointNameDrawer(
       position: CalibrationPointNamePosition? = null,
     ): CalibrationDrawer {
@@ -43,13 +49,27 @@ fun interface CalibrationDrawer {
   }
 }
 
+/** 标定点名称相对标定点的绘制方位 */
 enum class CalibrationPointNamePosition {
   TopEnd,
   BottomEnd,
   CenterEnd,
 }
 
-private class DefaultDrawer(
+/** 将归一化标定点转换为画布像素坐标 */
+fun CalibrationPoint.toComposeOffset(
+  containerSize: Size,
+  appendX: Float = 0f,
+  appendY: Float = 0f,
+): Offset {
+  if (containerSize.width <= 0f || containerSize.height <= 0f) return Offset.Zero
+  return Offset(
+    x = x * containerSize.width + appendX,
+    y = y * containerSize.height + appendY,
+  )
+}
+
+private data class DefaultDrawer(
   val lineDrawer: CalibrationDrawer,
   val pointDrawer: CalibrationDrawer,
   val pointNameDrawer: CalibrationDrawer,
@@ -65,7 +85,7 @@ private class DefaultDrawer(
   }
 }
 
-private class DefaultLineDrawer(
+private data class DefaultLineDrawer(
   private val closeLines: Boolean,
 ) : CalibrationDrawer {
   override fun DrawScope.draw(
@@ -94,15 +114,13 @@ private class DefaultLineDrawer(
               end = end.toComposeOffset(size),
               strokeWidth = config.lineWidth.toPx(),
             )
-          } else {
-            if (closeLines) {
-              drawLine(
-                color = config.lineColor,
-                start = point.toComposeOffset(size),
-                end = points.first().toComposeOffset(size),
-                strokeWidth = config.lineWidth.toPx(),
-              )
-            }
+          } else if (closeLines) {
+            drawLine(
+              color = config.lineColor,
+              start = point.toComposeOffset(size),
+              end = points.first().toComposeOffset(size),
+              strokeWidth = config.lineWidth.toPx(),
+            )
           }
         }
       }
@@ -110,7 +128,7 @@ private class DefaultLineDrawer(
   }
 }
 
-private class DefaultPointDrawer : CalibrationDrawer {
+private data object DefaultPointDrawer : CalibrationDrawer {
   override fun DrawScope.draw(
     calibration: Calibration,
     config: CalibrationConfig,
@@ -126,7 +144,7 @@ private class DefaultPointDrawer : CalibrationDrawer {
   }
 }
 
-private class DefaultPointNameDrawer(
+private data class DefaultPointNameDrawer(
   private val position: CalibrationPointNamePosition? = null,
 ) : CalibrationDrawer {
   override fun DrawScope.draw(
@@ -140,7 +158,7 @@ private class DefaultPointNameDrawer(
       points.size == 1 -> {
         val point = points.first()
         val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
-        drawPoint(
+        drawPointName(
           point = point,
           config = config,
           textLayoutResult = textLayoutResult,
@@ -151,7 +169,7 @@ private class DefaultPointNameDrawer(
         if (position != null) {
           points.forEach { point ->
             val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
-            drawPoint(
+            drawPointName(
               point = point,
               config = config,
               textLayoutResult = textLayoutResult,
@@ -163,74 +181,61 @@ private class DefaultPointNameDrawer(
           points.forEachIndexed { index, point ->
             val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
             if (index < half) {
-              drawPointTopEnd(point = point, config = config, textLayoutResult = textLayoutResult)
+              drawPointNameTopEnd(point = point, config = config, textLayoutResult = textLayoutResult)
             } else {
-              drawPointBottomEnd(point = point, config = config, textLayoutResult = textLayoutResult)
+              drawPointNameBottomEnd(point = point, config = config, textLayoutResult = textLayoutResult)
             }
           }
         }
       }
     }
   }
+}
 
-  private fun DrawScope.drawPoint(
-    point: CalibrationPoint,
-    config: CalibrationConfig,
-    textLayoutResult: TextLayoutResult,
-    position: CalibrationPointNamePosition,
-  ) {
-    when (position) {
-      CalibrationPointNamePosition.TopEnd -> drawPointTopEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-      CalibrationPointNamePosition.BottomEnd -> drawPointBottomEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-      CalibrationPointNamePosition.CenterEnd -> drawPointCenterEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-    }
-  }
-
-  private fun DrawScope.drawPointTopEnd(
-    point: CalibrationPoint,
-    config: CalibrationConfig,
-    textLayoutResult: TextLayoutResult,
-  ) {
-    drawText(
-      textLayoutResult = textLayoutResult,
-      topLeft = point.toComposeOffset(size, appendY = -textLayoutResult.size.height.toFloat() - (config.pointSize.toPx() / 2f)),
-    )
-  }
-
-  private fun DrawScope.drawPointBottomEnd(
-    point: CalibrationPoint,
-    config: CalibrationConfig,
-    textLayoutResult: TextLayoutResult,
-  ) {
-    drawText(
-      textLayoutResult = textLayoutResult,
-      topLeft = point.toComposeOffset(size, appendY = config.pointSize.toPx() / 2f),
-    )
-  }
-
-  private fun DrawScope.drawPointCenterEnd(
-    point: CalibrationPoint,
-    config: CalibrationConfig,
-    textLayoutResult: TextLayoutResult,
-  ) {
-    val appendX = config.pointSize.toPx() / 2f + textLayoutResult.size.height.toFloat() / 4f
-    val appendY = -textLayoutResult.size.height.toFloat() / 2f
-    drawText(
-      textLayoutResult = textLayoutResult,
-      topLeft = point.toComposeOffset(size, appendX = appendX, appendY = appendY),
-    )
+private fun DrawScope.drawPointName(
+  point: CalibrationPoint,
+  config: CalibrationConfig,
+  textLayoutResult: TextLayoutResult,
+  position: CalibrationPointNamePosition,
+) {
+  when (position) {
+    CalibrationPointNamePosition.TopEnd -> drawPointNameTopEnd(point = point, config = config, textLayoutResult = textLayoutResult)
+    CalibrationPointNamePosition.BottomEnd -> drawPointNameBottomEnd(point = point, config = config, textLayoutResult = textLayoutResult)
+    CalibrationPointNamePosition.CenterEnd -> drawPointNameCenterEnd(point = point, config = config, textLayoutResult = textLayoutResult)
   }
 }
 
-/** 转换为Compose的Offset */
-fun CalibrationPoint.toComposeOffset(
-  containerSize: Size,
-  appendX: Float = 0f,
-  appendY: Float = 0f,
-): Offset {
-  if (containerSize.width <= 0f || containerSize.height <= 0f) return Offset.Zero
-  return Offset(
-    x = x * containerSize.width + appendX,
-    y = y * containerSize.height + appendY,
+private fun DrawScope.drawPointNameTopEnd(
+  point: CalibrationPoint,
+  config: CalibrationConfig,
+  textLayoutResult: TextLayoutResult,
+) {
+  drawText(
+    textLayoutResult = textLayoutResult,
+    topLeft = point.toComposeOffset(size, appendY = -textLayoutResult.size.height.toFloat() - (config.pointSize.toPx() / 2f)),
+  )
+}
+
+private fun DrawScope.drawPointNameBottomEnd(
+  point: CalibrationPoint,
+  config: CalibrationConfig,
+  textLayoutResult: TextLayoutResult,
+) {
+  drawText(
+    textLayoutResult = textLayoutResult,
+    topLeft = point.toComposeOffset(size, appendY = config.pointSize.toPx() / 2f),
+  )
+}
+
+private fun DrawScope.drawPointNameCenterEnd(
+  point: CalibrationPoint,
+  config: CalibrationConfig,
+  textLayoutResult: TextLayoutResult,
+) {
+  val appendX = config.pointSize.toPx() / 2f + textLayoutResult.size.height.toFloat() / 4f
+  val appendY = -textLayoutResult.size.height.toFloat() / 2f
+  drawText(
+    textLayoutResult = textLayoutResult,
+    topLeft = point.toComposeOffset(size, appendX = appendX, appendY = appendY),
   )
 }

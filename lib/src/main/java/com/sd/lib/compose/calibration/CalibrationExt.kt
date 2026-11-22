@@ -1,22 +1,18 @@
 package com.sd.lib.compose.calibration
 
-fun Calibration.withDrawer(drawer: CalibrationDrawer): Calibration {
-  return when (this) {
-    is DrawableCalibrationImpl -> this.copy(drawer = drawer)
-    else -> DrawableCalibrationImpl(
-      id = this.id,
-      points = this.points,
-      drawer = drawer,
-    )
+/** 在标定组列表中查找首个匹配指定[id]的标定项 */
+fun List<CalibrationGroup>.findCalibration(id: String): Calibration? {
+  for (group in this) {
+    for (calibration in group.calibrations) {
+      if (calibration.id == id) {
+        return calibration
+      }
+    }
   }
+  return null
 }
 
-private data class DrawableCalibrationImpl(
-  override val id: String,
-  override val points: List<CalibrationPoint>,
-  val drawer: CalibrationDrawer,
-) : Calibration, CalibrationDrawer by drawer {
-  override fun overridePoints(points: List<CalibrationPoint>?): Calibration {
-    return copy(points = points ?: this.points)
-  }
+/** 在标定组列表中查找首个匹配指定[id]的标定项顶点列表 */
+fun List<CalibrationGroup>.findPoints(id: String): List<CalibrationPoint>? {
+  return findCalibration(id)?.points
 }
