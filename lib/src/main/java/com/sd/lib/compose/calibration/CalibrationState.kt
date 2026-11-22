@@ -21,8 +21,7 @@ fun rememberCalibrationState(
   initialGroups: List<CalibrationGroup> = emptyList(),
   key: Any? = null,
 ): CalibrationState {
-  val initialSnapshot = initialGroups.toImmutableSnapshot()
-  val normalizedInitial = remember(initialSnapshot) { initialSnapshot.normalized() }
+  val normalizedInitial = remember(initialGroups) { initialGroups.normalized() }
   val saver = remember(normalizedInitial, key) {
     createContextualSaver(
       expectedInitialGroups = normalizedInitial,
@@ -47,7 +46,6 @@ class CalibrationState(
   private val _renderGroupsState = mutableStateOf<List<RenderGroup>>(emptyList())
   private val _selectedGroupIndexState = mutableIntStateOf(-1)
   private val _generationState = mutableIntStateOf(0)
-  private val _hasUncommittedDragState = mutableStateOf(false)
 
   /** 当前标定组不可变快照，坐标范围为 `[0f, 1f]` */
   val groups: List<CalibrationGroup>
@@ -76,11 +74,6 @@ class CalibrationState(
       return _generationState.intValue
     }
 
-  internal val hasUncommittedDrag: Boolean
-    get() {
-      return _hasUncommittedDragState.value
-    }
-
   /** 获取当前标定组不可变快照 */
   @Deprecated("请直接读取 groups 属性", ReplaceWith("groups"))
   fun getCurrentGroups(): List<CalibrationGroup> {
@@ -90,14 +83,12 @@ class CalibrationState(
   /** 更新标定组列表，自动将坐标限制在 `[0f, 1f]` 范围内 */
   fun setGroups(groups: List<CalibrationGroup>) {
     val normalized = groups.normalized()
-    val hasUncommittedDrag = Snapshot.withoutReadObservation { _hasUncommittedDragState.value }
     val currentGroups = Snapshot.withoutReadObservation { _groupsState.value }
-    if (!hasUncommittedDrag && normalized == currentGroups) {
+    if (normalized == currentGroups) {
       return
     }
     val previousIndex = Snapshot.withoutReadObservation { _selectedGroupIndexState.intValue }
     val previousSelectedIds = currentGroups.getOrNull(previousIndex)?.calibrationIds()?.takeIf { it.isNotEmpty() }
-    _hasUncommittedDragState.value = false
     _groupsState.value = normalized
     _renderGroupsState.value = normalized.map { it.toRenderGroup() }
     _selectedGroupIndexState.intValue = when {
@@ -117,16 +108,11 @@ class CalibrationState(
     _selectedGroupIndexState.intValue = if (index in _renderGroupsState.value.indices) index else -1
   }
 
-  internal fun markDirty() {
-    _hasUncommittedDragState.value = true
-  }
-
   /** 提交指定[expectedGeneration]的手势修改，坐标有实际变化时更新[groups]并返回新快照 */
   internal fun commitDrag(expectedGeneration: Int): List<CalibrationGroup>? {
     if (expectedGeneration != _generationState.intValue) {
       return null
     }
-    _hasUncommittedDragState.value = false
     val updated = Snapshot.withoutReadObservation {
       _renderGroupsState.value.map { it.toCalibrationGroup() }
     }

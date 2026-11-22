@@ -216,7 +216,7 @@ private fun DrawScope.drawPointName(
 ) {
   val topLeft = resolvePointNameTopLeft(
     pointCenter = point.toComposeOffset(size),
-    pointRadius = (config.pointSize.toPx() / 2f).coerceAtLeast(0f),
+    pointRadius = config.pointSize.toPx() / 2f,
     textSize = textLayoutResult.size,
     canvasSize = size,
     position = position,
@@ -275,5 +275,5 @@ internal fun resolvePointNameTopLeft(
 }
 
 internal fun Size.isValidContainerSize(): Boolean {
-  return isSpecified && width.isFinite() && height.isFinite() && width > 0f && height > 0f
+  return isSpecified && width > 0f && height > 0f
 }

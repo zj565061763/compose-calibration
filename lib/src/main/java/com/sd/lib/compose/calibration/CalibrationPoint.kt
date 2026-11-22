@@ -35,7 +35,7 @@ data class CalibrationPoint(
 internal fun CalibrationPoint.normalized(): CalibrationPoint {
   val normalizedX = x.coerceNormalized()
   val normalizedY = y.coerceNormalized()
-  if (x.toRawBits() == normalizedX.toRawBits() && y.toRawBits() == normalizedY.toRawBits()) {
+  if (x == normalizedX && y == normalizedY) {
     return this
   }
   return copy(
@@ -45,7 +45,5 @@ internal fun CalibrationPoint.normalized(): CalibrationPoint {
 }
 
 internal fun Float.coerceNormalized(): Float {
-  if (isNaN()) return 0f
-  val clamped = coerceIn(0f, 1f)
-  return if (clamped == 0f) 0f else clamped
+  return coerceIn(0f, 1f)
 }

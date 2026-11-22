@@ -1,7 +1,6 @@
 package com.sd.lib.compose.calibration
 
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.snapshots.SnapshotStateList
 
 /**
  * 标定组，同一组内的标定项在选中时联动高亮
@@ -61,14 +60,5 @@ internal fun List<CalibrationGroup>.normalized(): List<CalibrationGroup> {
         )
       },
     )
-  }
-}
-
-internal fun <T> List<T>.toImmutableSnapshot(): List<T> {
-  return if (this is SnapshotStateList<*>) {
-    @Suppress("UNCHECKED_CAST")
-    (this as SnapshotStateList<T>).toList()
-  } else {
-    this
   }
 }

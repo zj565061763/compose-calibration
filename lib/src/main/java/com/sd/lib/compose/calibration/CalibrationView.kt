@@ -4,15 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -28,60 +22,6 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.toSize
-
-/**
- * 受控模式的标定画布，拖拽结束或手势中断时通过[onValueChange]回调最新的不可变标定组列表
- *
- * @param modifier 修饰符
- * @param groups 当前标定组列表
- * @param onValueChange 标定点坐标变更后的回调
- * @param enabled 是否允许触摸拖拽标定点
- * @param getConfig 获取标定项的绘制样式配置
- * @param getDrawer 获取标定项的绘制器
- */
-@Composable
-fun CalibrationView(
-  modifier: Modifier = Modifier,
-  groups: List<CalibrationGroup>,
-  onValueChange: (List<CalibrationGroup>) -> Unit,
-  enabled: Boolean = true,
-  getConfig: (current: Calibration, selected: CalibrationGroup?) -> CalibrationConfig = DefaultGetConfig,
-  getDrawer: (Calibration) -> CalibrationDrawer = DefaultGetDrawer,
-) {
-  val groupsSnapshot = groups.toImmutableSnapshot()
-  val normalizedGroups = remember(groupsSnapshot) { groupsSnapshot.normalized() }
-  val state = remember { CalibrationState(initialGroups = normalizedGroups) }
-  val lastSyncedGroupsRef = remember { ValueRef(normalizedGroups) }
-  var commitVersion by remember { mutableIntStateOf(0) }
-
-  SideEffect {
-    if (lastSyncedGroupsRef.value != normalizedGroups) {
-      lastSyncedGroupsRef.value = normalizedGroups
-      state.setGroups(normalizedGroups)
-    }
-  }
-
-  val latestGroupsState = rememberUpdatedState(normalizedGroups)
-  LaunchedEffect(normalizedGroups, commitVersion) {
-    if (commitVersion == 0 || latestGroupsState.value == state.groups) return@LaunchedEffect
-    withFrameNanos {}
-    if (!state.hasUncommittedDrag && latestGroupsState.value != state.groups) {
-      state.setGroups(latestGroupsState.value)
-    }
-  }
-
-  CalibrationView(
-    modifier = modifier,
-    state = state,
-    enabled = enabled,
-    onValueChange = { updatedGroups ->
-      commitVersion++
-      onValueChange(updatedGroups)
-    },
-    getConfig = getConfig,
-    getDrawer = getDrawer,
-  )
-}
 
 /**
  * 基于[CalibrationState]的标定画布
@@ -102,10 +42,7 @@ fun CalibrationView(
   getConfig: (current: Calibration, selected: CalibrationGroup?) -> CalibrationConfig = DefaultGetConfig,
   getDrawer: (Calibration) -> CalibrationDrawer = DefaultGetDrawer,
 ) {
-  val onValueChangeRef = remember(state) { ValueRef(onValueChange) }
-  SideEffect {
-    onValueChangeRef.value = onValueChange
-  }
+  val onValueChangeState = rememberUpdatedState(onValueChange)
   val getConfigState = rememberUpdatedState(getConfig)
   val getDrawerState = rememberUpdatedState(getDrawer)
   val textCacheSize = remember(state, state.generation) {
@@ -151,7 +88,6 @@ fun CalibrationView(
           downPosition = down.position,
         ) ?: return@awaitEachGesture
 
-        state.markDirty()
         try {
           targetPoint.updateFromStart(
             startX = startX,
@@ -171,7 +107,7 @@ fun CalibrationView(
           }
         } finally {
           state.commitDrag(dragGeneration)?.also { updatedGroups ->
-            onValueChangeRef.value?.invoke(updatedGroups)
+            onValueChangeState.value?.invoke(updatedGroups)
           }
         }
       }
@@ -212,10 +148,6 @@ internal class TouchedPointHit(
   val groupIndex: Int,
   val point: RenderPoint,
   val distanceSquared: Float,
-)
-
-private class ValueRef<T>(
-  var value: T,
 )
 
 private const val MIN_TEXT_CACHE_SIZE = 64
@@ -323,7 +255,7 @@ internal fun RenderCalibration.findNearestTouchedPoint(
   containerSize: Size,
   touchedSize: Float,
 ): TouchedPointHit? {
-  if (!containerSize.isValidContainerSize() || !touchedSize.isFinite() || touchedSize <= 0f) {
+  if (!containerSize.isValidContainerSize() || touchedSize <= 0f) {
     return null
   }
   val radius = touchedSize / 2f
@@ -368,9 +300,6 @@ internal suspend fun AwaitPointerEventScope.awaitTouchSlopForPointer(
   pointerId: PointerId,
   downPosition: Offset,
 ): PointerInputChange? {
-  if (currentEvent.changes.firstOrNull { it.id == pointerId }?.pressed != true) {
-    return null
-  }
   val touchSlop = viewConfiguration.touchSlop
   val touchSlopSquared = touchSlop * touchSlop
   while (true) {
@@ -394,9 +323,6 @@ internal suspend inline fun AwaitPointerEventScope.dragPointer(
   pointerId: PointerId,
   onDrag: (PointerInputChange) -> Unit,
 ) {
-  if (currentEvent.changes.firstOrNull { it.id == pointerId }?.pressed != true) {
-    return
-  }
   while (true) {
     val event = awaitPointerEvent()
     val change = event.changes.firstOrNull { it.id == pointerId } ?: return

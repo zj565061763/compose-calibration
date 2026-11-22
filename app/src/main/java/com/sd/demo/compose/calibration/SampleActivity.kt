@@ -38,7 +38,9 @@ import com.sd.lib.compose.calibration.CalibrationDrawer
 import com.sd.lib.compose.calibration.CalibrationGroup
 import com.sd.lib.compose.calibration.CalibrationPoint
 import com.sd.lib.compose.calibration.CalibrationPointNamePosition
+import com.sd.lib.compose.calibration.CalibrationState
 import com.sd.lib.compose.calibration.CalibrationView
+import com.sd.lib.compose.calibration.rememberCalibrationState
 import com.sd.lib.compose.calibration.toComposeOffset
 
 class SampleActivity : ComponentActivity() {
@@ -74,12 +76,16 @@ private fun SampleRoute(
     )
   }
 
-  val currentGroups = slotGroupsMap.getValue(selectedSlot)
+  val initialGroups = remember(selectedSlot) { slotGroupsMap.getValue(selectedSlot) }
+  val calibrationState = rememberCalibrationState(
+    initialGroups = initialGroups,
+    key = selectedSlot,
+  )
 
   Content(
     modifier = modifier,
     selectedSlot = selectedSlot,
-    groups = currentGroups,
+    state = calibrationState,
     onSelectSlot = { slot ->
       selectedSlot = slot
     },
@@ -89,6 +95,7 @@ private fun SampleRoute(
         SampleSlot.SlotB -> createSampleGroups(totalCount = 4, columnCount = 2)
       }
       slotGroupsMap += selectedSlot to defaultGroups
+      calibrationState.setGroups(defaultGroups)
     },
     onValueChange = { updatedGroups ->
       slotGroupsMap += selectedSlot to updatedGroups
@@ -103,7 +110,7 @@ private fun SampleRoute(
 private fun Content(
   modifier: Modifier = Modifier,
   selectedSlot: SampleSlot,
-  groups: List<CalibrationGroup>,
+  state: CalibrationState,
   onSelectSlot: (SampleSlot) -> Unit,
   onClickReset: () -> Unit,
   onValueChange: (List<CalibrationGroup>) -> Unit,
@@ -145,7 +152,7 @@ private fun Content(
           .fillMaxWidth()
           .aspectRatio(1f)
           .background(Color.Black),
-        groups = groups,
+        state = state,
         onValueChange = onValueChange,
         getDrawer = getDrawer,
       )
