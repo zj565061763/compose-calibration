@@ -46,7 +46,7 @@ class CalibrationState(
   private val _renderGroupsState = mutableStateOf<List<RenderGroup>>(emptyList())
   private val _selectedGroupIndexState = mutableIntStateOf(-1)
   private val _generationState = mutableIntStateOf(0)
-  private var _hasUncommittedDrag = false
+  private val _hasUncommittedDragState = mutableStateOf(false)
 
   /** 当前标定组不可变快照，坐标范围为 `[0f, 1f]` */
   val groups: List<CalibrationGroup>
@@ -84,17 +84,20 @@ class CalibrationState(
   /** 更新标定组列表，自动将坐标限制在 `[0f, 1f]` 范围内 */
   fun setGroups(groups: List<CalibrationGroup>) {
     val normalized = groups.normalized()
-    if (!_hasUncommittedDrag && normalized == _groupsState.value) {
+    val hasUncommittedDrag = Snapshot.withoutReadObservation { _hasUncommittedDragState.value }
+    val currentGroups = Snapshot.withoutReadObservation { _groupsState.value }
+    if (!hasUncommittedDrag && normalized == currentGroups) {
       return
     }
-    val previousSelectedIds = selectedGroup?.calibrationIds()?.takeIf { it.isNotEmpty() }
-    _hasUncommittedDrag = false
+    val previousIndex = Snapshot.withoutReadObservation { _selectedGroupIndexState.intValue }
+    val previousSelectedIds = currentGroups.getOrNull(previousIndex)?.calibrationIds()?.takeIf { it.isNotEmpty() }
+    _hasUncommittedDragState.value = false
     _groupsState.value = normalized
     _renderGroupsState.value = normalized.map { it.toRenderGroup() }
-    _selectedGroupIndexState.intValue = if (previousSelectedIds != null) {
-      normalized.indexOfFirst { it.calibrationIds() == previousSelectedIds }
-    } else {
-      -1
+    _selectedGroupIndexState.intValue = when {
+      previousSelectedIds == null -> -1
+      normalized.getOrNull(previousIndex)?.calibrationIds() == previousSelectedIds -> previousIndex
+      else -> normalized.indexOfFirst { it.calibrationIds() == previousSelectedIds }
     }
     _generationState.intValue++
   }
@@ -109,7 +112,7 @@ class CalibrationState(
   }
 
   internal fun markDirty() {
-    _hasUncommittedDrag = true
+    _hasUncommittedDragState.value = true
   }
 
   /** 提交指定[expectedGeneration]的手势修改，坐标有实际变化时更新[groups]并返回新快照 */
@@ -117,7 +120,7 @@ class CalibrationState(
     if (expectedGeneration != _generationState.intValue) {
       return null
     }
-    _hasUncommittedDrag = false
+    _hasUncommittedDragState.value = false
     val updated = Snapshot.withoutReadObservation {
       _renderGroupsState.value.map { it.toCalibrationGroup() }
     }

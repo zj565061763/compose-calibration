@@ -21,7 +21,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
@@ -101,7 +100,15 @@ fun CalibrationView(
   val onValueChangeState = rememberUpdatedState(onValueChange)
   val getConfigState = rememberUpdatedState(getConfig)
   val getDrawerState = rememberUpdatedState(getDrawer)
-  val textMeasurer = rememberTextMeasurer()
+  val textCacheSize = remember(state, state.generation) {
+    val totalPoints = Snapshot.withoutReadObservation {
+      state.renderGroups.sumOf { group ->
+        group.calibrations.sumOf { calibration -> calibration.points.size }
+      }
+    }
+    maxOf(MIN_TEXT_CACHE_SIZE, totalPoints * 2)
+  }
+  val textMeasurer = rememberTextMeasurer(cacheSize = textCacheSize)
 
   val canvasModifier = if (enabled) {
     modifier.pointerInput(state, state.generation) {
@@ -140,6 +147,10 @@ fun CalibrationView(
         }
 
         val targetPoint = touchedPoint ?: return@awaitEachGesture
+        down.consume()
+
+        val startX = Snapshot.withoutReadObservation { targetPoint.x }
+        val startY = Snapshot.withoutReadObservation { targetPoint.y }
         val dragGeneration = state.generation
 
         val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ ->
@@ -148,18 +159,19 @@ fun CalibrationView(
 
         state.markDirty()
         try {
-          (touchSlopChange.position - down.position).also { initialDistance ->
-            targetPoint.updatePercentageOffset(
-              offset = initialDistance,
-              containerSize = size.toSize(),
-            )
-          }
+          targetPoint.updateFromStart(
+            startX = startX,
+            startY = startY,
+            totalOffset = touchSlopChange.position - down.position,
+            containerSize = size.toSize(),
+          )
 
           drag(touchSlopChange.id) { change ->
-            val dragAmount = change.positionChange()
             change.consume()
-            targetPoint.updatePercentageOffset(
-              offset = dragAmount,
+            targetPoint.updateFromStart(
+              startX = startX,
+              startY = startY,
+              totalOffset = change.position - down.position,
               containerSize = size.toSize(),
             )
           }
@@ -175,6 +187,8 @@ fun CalibrationView(
   }
 
   Canvas(modifier = canvasModifier) {
+    if (size.width <= 0f || size.height <= 0f) return@Canvas
+
     val renderGroups = state.renderGroups
     val selectedIndex = state.selectedGroupIndex
     val selectedSnapshot = renderGroups.getOrNull(selectedIndex)?.toCalibrationGroup()
@@ -199,6 +213,8 @@ fun CalibrationView(
     }
   }
 }
+
+private const val MIN_TEXT_CACHE_SIZE = 64
 
 private val DefaultGetConfig: (Calibration, CalibrationGroup?) -> CalibrationConfig = { current, selected ->
   if (selected != null && selected.containsCalibration(current.id)) {
@@ -227,50 +243,55 @@ private inline fun DrawScope.drawRenderGroup(
   }
 }
 
-/** 在标定组中查找命中的顶点 */
+/** 按绘制逆序在标定组中查找最上层命中的顶点 */
 private inline fun Density.findTouchedPoint(
   group: RenderGroup,
   touched: Offset,
   containerSize: Size,
   getConfig: (Calibration) -> CalibrationConfig,
 ): RenderPoint? {
-  return group.calibrations.firstNotNullOfOrNull { renderCalibration ->
+  for (index in group.calibrations.indices.reversed()) {
+    val renderCalibration = group.calibrations[index]
     val calibration = Snapshot.withoutReadObservation {
       renderCalibration.toCalibration()
     }
     val config = getConfig(calibration)
-    renderCalibration.findTouchedPoint(
+    val point = renderCalibration.findTouchedPoint(
       touched = touched,
       containerSize = containerSize,
       touchedSize = config.pointTouchedSize.toPx(),
     )
+    if (point != null) {
+      return point
+    }
   }
+  return null
 }
 
-/** 在单个标定项中查找命中的顶点 */
-private fun RenderCalibration.findTouchedPoint(
+/** 按绘制逆序在单个标定项中查找最上层命中的顶点 */
+internal fun RenderCalibration.findTouchedPoint(
   touched: Offset,
   containerSize: Size,
   touchedSize: Float,
 ): RenderPoint? {
   return Snapshot.withoutReadObservation {
-    points.firstOrNull { point ->
+    points.lastOrNull { point ->
       val absoluteOffset = point.toCalibrationPoint().toComposeOffset(containerSize)
       Rect(center = absoluteOffset, radius = touchedSize / 2f).contains(touched)
     }
   }
 }
 
-/** 按画布像素偏移更新顶点的归一化坐标 */
-private fun RenderPoint.updatePercentageOffset(
-  offset: Offset,
+/** 按起始归一化坐标与相对按下点的像素总位移更新顶点坐标 */
+internal fun RenderPoint.updateFromStart(
+  startX: Float,
+  startY: Float,
+  totalOffset: Offset,
   containerSize: Size,
 ) {
   if (containerSize.width <= 0f || containerSize.height <= 0f) return
-  val currentX = Snapshot.withoutReadObservation { x }
-  val currentY = Snapshot.withoutReadObservation { y }
   update(
-    x = currentX + offset.x / containerSize.width,
-    y = currentY + offset.y / containerSize.height,
+    x = startX + totalOffset.x / containerSize.width,
+    y = startY + totalOffset.y / containerSize.height,
   )
 }

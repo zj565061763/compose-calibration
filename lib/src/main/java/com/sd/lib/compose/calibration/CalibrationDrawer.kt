@@ -157,6 +157,7 @@ private data class DefaultPointNameDrawer(
       points.isEmpty() -> return
       points.size == 1 -> {
         val point = points.first()
+        if (point.name.isEmpty()) return
         val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
         drawPointName(
           point = point,
@@ -168,6 +169,7 @@ private data class DefaultPointNameDrawer(
       else -> {
         if (position != null) {
           points.forEach { point ->
+            if (point.name.isEmpty()) return@forEach
             val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
             drawPointName(
               point = point,
@@ -179,6 +181,7 @@ private data class DefaultPointNameDrawer(
         } else {
           val half = points.size / 2
           points.forEachIndexed { index, point ->
+            if (point.name.isEmpty()) return@forEachIndexed
             val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
             if (index < half) {
               drawPointNameTopEnd(point = point, config = config, textLayoutResult = textLayoutResult)

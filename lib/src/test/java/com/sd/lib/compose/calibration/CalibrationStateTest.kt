@@ -1,6 +1,8 @@
 package com.sd.lib.compose.calibration
 
 import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -121,6 +123,61 @@ class CalibrationStateTest {
     state.setGroups(listOf(otherSlot))
     assertEquals(-1, state.selectedGroupIndex)
     assertNull(state.selectedGroup)
+  }
+
+  @Test
+  fun setGroupsKeepsExactSelectedIndexWhenDuplicateCalibrationIdsExist() {
+    val dup0 = CalibrationGroup.create(Calibration.create("roi", listOf(CalibrationPoint.create("A", 0.1f, 0.1f))))
+    val dup1 = CalibrationGroup.create(Calibration.create("roi", listOf(CalibrationPoint.create("B", 0.2f, 0.2f))))
+    val state = CalibrationState(initialGroups = listOf(dup0, dup1))
+    state.selectGroup(1)
+
+    val updatedDup1 = CalibrationGroup.create(Calibration.create("roi", listOf(CalibrationPoint.create("B", 0.6f, 0.6f))))
+    state.setGroups(listOf(dup0, updatedDup1))
+
+    assertEquals(1, state.selectedGroupIndex)
+    assertEquals(0.6f, state.selectedGroup?.calibrations?.single()?.points?.single()?.x ?: -1f, 0f)
+  }
+
+  @Test
+  fun updateFromStartHasZeroDriftAfterCrossingCanvasBoundaryAndReturning() {
+    val point = RenderPoint(name = "A", x = 0.9f, y = 0.5f)
+    val containerSize = Size(width = 1000f, height = 1000f)
+
+    // 手指从 900px 拖到 1100px（超出右边界 100px），坐标限制在 1f
+    point.updateFromStart(startX = 0.9f, startY = 0.5f, totalOffset = Offset(200f, 0f), containerSize = containerSize)
+    assertEquals(1f, point.x, 0f)
+
+    // 手指往回拉 50px 到 1050px（仍在右边界外），顶点保持在 1f 不提前回退
+    point.updateFromStart(startX = 0.9f, startY = 0.5f, totalOffset = Offset(150f, 0f), containerSize = containerSize)
+    assertEquals(1f, point.x, 0f)
+
+    // 手指回到画布内 950px（相对按下点 +50px），顶点精确对齐到 0.95f
+    point.updateFromStart(startX = 0.9f, startY = 0.5f, totalOffset = Offset(50f, 0f), containerSize = containerSize)
+    assertEquals(0.95f, point.x, 0f)
+
+    // 手指回到按下点 900px，顶点无误差恢复到 0.9f
+    point.updateFromStart(startX = 0.9f, startY = 0.5f, totalOffset = Offset.Zero, containerSize = containerSize)
+    assertEquals(0.9f, point.x, 0f)
+  }
+
+  @Test
+  fun findTouchedPointPrefersTopmostOverlappingPoint() {
+    val calibration = RenderCalibration(
+      id = "roi",
+      points = listOf(
+        RenderPoint(name = "Bottom", x = 0.5f, y = 0.5f),
+        RenderPoint(name = "Top", x = 0.5f, y = 0.5f),
+      ),
+    )
+
+    val touched = calibration.findTouchedPoint(
+      touched = Offset(500f, 500f),
+      containerSize = Size(1000f, 1000f),
+      touchedSize = 32f,
+    )
+
+    assertEquals("Top", touched?.name)
   }
 
   @Test
