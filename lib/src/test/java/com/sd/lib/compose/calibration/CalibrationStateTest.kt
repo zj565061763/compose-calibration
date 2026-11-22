@@ -4,7 +4,9 @@ import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -42,12 +44,22 @@ class CalibrationStateTest {
     val snapshotBeforeDrag = state.groups
 
     val gen = state.generation
+    state.beginGesture()
+    assertTrue(state.isGestureActive)
+
+    // 仅按下未跨过 touchSlop（未调用 markDirty）时提交返回 null
+    state.endGesture()
+    assertFalse(state.isGestureActive)
+    assertNull(state.commitDrag(expectedGeneration = gen))
+
+    state.beginGesture()
     state.markDirty()
     state.renderGroups.first().calibrations.first().points.first().update(x = 0.6f, y = 0.7f)
 
     // 提交前外部快照保持不变
     assertEquals(0.2f, state.groups.findPoints("roi")!!.first().x, 0f)
 
+    state.endGesture()
     val committed = state.commitDrag(expectedGeneration = gen)
     assertNotNull(committed)
     assertEquals(0.6f, committed!!.findPoints("roi")!!.first().x, 0f)
@@ -160,6 +172,67 @@ class CalibrationStateTest {
     // 手指回到按下点 900px，顶点无误差恢复到 0.9f
     point.updateFromStart(startX = 0.9f, startY = 0.5f, totalOffset = Offset.Zero, containerSize = containerSize)
     assertEquals(0.9f, point.x, 0f)
+
+    // 非法尺寸（Size.Unspecified / Size.Zero）不会误修改坐标
+    point.updateFromStart(startX = 0.9f, startY = 0.5f, totalOffset = Offset(100f, 100f), containerSize = Size.Unspecified)
+    assertEquals(0.9f, point.x, 0f)
+    assertEquals(0.5f, point.y, 0f)
+  }
+
+  @Test
+  fun toComposeOffsetHandlesValidAndInvalidSizes() {
+    val point = CalibrationPoint.create(name = "A", x = 0.25f, y = 0.5f)
+    assertEquals(
+      Offset(260f, 395f),
+      point.toComposeOffset(
+        containerSize = Size(1000f, 800f),
+        appendX = 10f,
+        appendY = -5f,
+      ),
+    )
+    assertEquals(Offset.Zero, point.toComposeOffset(Size.Zero))
+    assertEquals(Offset.Zero, point.toComposeOffset(Size.Unspecified))
+    assertEquals(Offset.Zero, point.toComposeOffset(Size(-100f, 200f)))
+    assertEquals(Offset.Zero, point.toComposeOffset(Size(Float.POSITIVE_INFINITY, 200f)))
+  }
+
+  @Test
+  fun clampTextTopLeftKeepsPointNameInsideCanvasBounds() {
+    val canvasSize = Size(200f, 100f)
+    val textSize = IntSize(40, 20)
+
+    // 顶部与右侧溢出时夹紧到画布内侧边缘
+    assertEquals(
+      Offset(160f, 0f),
+      clampTextTopLeft(topLeft = Offset(195f, -24f), textSize = textSize, canvasSize = canvasSize),
+    )
+    // 底部与左侧溢出时夹紧到画布内侧边缘
+    assertEquals(
+      Offset(0f, 80f),
+      clampTextTopLeft(topLeft = Offset(-10f, 104f), textSize = textSize, canvasSize = canvasSize),
+    )
+    // 画布尺寸小于文本尺寸时夹紧到原点，不抛空区间异常
+    assertEquals(
+      Offset(0f, 0f),
+      clampTextTopLeft(topLeft = Offset(10f, 10f), textSize = IntSize(300, 200), canvasSize = canvasSize),
+    )
+  }
+
+  @Test
+  fun findCalibrationAndContainsCalibrationResolveExpectedItems() {
+    val c1 = Calibration.create("c1", listOf(CalibrationPoint.create("A", 0.1f, 0.2f)))
+    val c2First = Calibration.create("c2", listOf(CalibrationPoint.create("B", 0.3f, 0.4f)))
+    val c2Second = Calibration.create("c2", listOf(CalibrationPoint.create("C", 0.5f, 0.6f)))
+    val group0 = CalibrationGroup.create(c1, c2First)
+    val group1 = CalibrationGroup.create(c2Second)
+    val groups = listOf(group0, group1)
+
+    assertTrue(group0.containsCalibration("c1"))
+    assertFalse(group0.containsCalibration("missing"))
+    assertEquals(c2First, groups.findCalibration("c2"))
+    assertEquals(c2First.points, groups.findPoints("c2"))
+    assertNull(groups.findCalibration("missing"))
+    assertNull(groups.findPoints("missing"))
   }
 
   @Test
@@ -270,7 +343,7 @@ class CalibrationStateTest {
     assertEquals(state.groups, standaloneRestored!!.groups)
     assertEquals(0, standaloneRestored.selectedGroupIndex)
 
-    // 1. 常规压栈返回 / 重建（initialGroups 与 key 均未变）：恢复拖拽后的点位与选中项
+    // 1. 常规压栈返回 / 重建（initialGroups 与带匿名子类的枚举 key 均未变）：恢复拖拽后的点位与选中项
     val restoredSameSlot = preFinishSaver.restore(saved)
     assertNotNull(restoredSameSlot)
     assertEquals(0.75f, restoredSameSlot!!.groups.findPoints("roi")!!.first().x, 0f)
@@ -307,8 +380,18 @@ class CalibrationStateTest {
 }
 
 private enum class TestSlot {
-  PreFinish,
-  Finish,
+  PreFinish {
+    override fun label(): String {
+      return "pre"
+    }
+  },
+  Finish {
+    override fun label(): String {
+      return "finish"
+    }
+  };
+
+  abstract fun label(): String
 }
 
 private object BundleCompatibleSaverScope : SaverScope {

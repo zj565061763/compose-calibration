@@ -27,7 +27,7 @@ data class CalibrationGroup(
 /**
  * 标定项
  *
- * @param id 标定唯一标识
+ * @param id 同一画布内唯一的标定标识，重复标识在默认样式下会联动高亮
  * @param points 标定点列表
  */
 @Immutable

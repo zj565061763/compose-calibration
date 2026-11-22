@@ -14,7 +14,7 @@ import androidx.compose.runtime.snapshots.Snapshot
  * 创建并记住支持导航返回、配置变更与进程重建保活的[CalibrationState]
  *
  * @param initialGroups 初始标定组列表，变化时会重置状态
- * @param key 附加标识（例如当前机位标识），变化时会重置状态并隔离存档
+ * @param key 附加标识（如机位标识），变化时会重置状态并隔离存档，需具备稳定的 `toString()` 表示（如基本类型、`String`、`Enum` 或 `data class`）
  */
 @Composable
 fun rememberCalibrationState(
@@ -46,6 +46,7 @@ class CalibrationState(
   private val _renderGroupsState = mutableStateOf<List<RenderGroup>>(emptyList())
   private val _selectedGroupIndexState = mutableIntStateOf(-1)
   private val _generationState = mutableIntStateOf(0)
+  private val _activeGestureCountState = mutableIntStateOf(0)
   private val _hasUncommittedDragState = mutableStateOf(false)
 
   /** 当前标定组不可变快照，坐标范围为 `[0f, 1f]` */
@@ -73,6 +74,11 @@ class CalibrationState(
   internal val generation: Int
     get() {
       return _generationState.intValue
+    }
+
+  internal val isGestureActive: Boolean
+    get() {
+      return _activeGestureCountState.intValue > 0
     }
 
   internal val hasUncommittedDrag: Boolean
@@ -116,6 +122,14 @@ class CalibrationState(
     _selectedGroupIndexState.intValue = if (index in _renderGroupsState.value.indices) index else -1
   }
 
+  internal fun beginGesture() {
+    _activeGestureCountState.intValue++
+  }
+
+  internal fun endGesture() {
+    _activeGestureCountState.intValue = (_activeGestureCountState.intValue - 1).coerceAtLeast(0)
+  }
+
   internal fun markDirty() {
     _hasUncommittedDragState.value = true
   }
@@ -123,6 +137,9 @@ class CalibrationState(
   /** 提交指定[expectedGeneration]的手势修改，坐标有实际变化时更新[groups]并返回新快照 */
   internal fun commitDrag(expectedGeneration: Int): List<CalibrationGroup>? {
     if (expectedGeneration != _generationState.intValue) {
+      return null
+    }
+    if (!Snapshot.withoutReadObservation { _hasUncommittedDragState.value }) {
       return null
     }
     _hasUncommittedDragState.value = false
@@ -331,7 +348,7 @@ private fun deserializeGroups(raw: Any?): List<CalibrationGroup>? {
 private fun Any?.toSaveableKeyToken(): String? {
   if (this == null) return null
   return when (this) {
-    is Enum<*> -> "${javaClass.name}:$name"
+    is Enum<*> -> "${declaringJavaClass.name}:$name"
     else -> "${javaClass.name}:$this"
   }
 }

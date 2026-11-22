@@ -7,12 +7,13 @@ import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.toSize
+import kotlinx.coroutines.flow.first
 
 /**
  * 受控模式的标定画布，拖拽结束或手势中断时通过[onValueChange]回调最新的不可变标定组列表
@@ -46,21 +48,24 @@ fun CalibrationView(
 ) {
   val normalizedGroups = remember(groups) { groups.normalized() }
   val state = remember { CalibrationState(initialGroups = normalizedGroups) }
-  var lastSyncedGroups by remember { mutableStateOf(normalizedGroups) }
+  val lastSyncedGroupsRef = remember { SyncedGroupsRef(normalizedGroups) }
   var commitVersion by remember { mutableIntStateOf(0) }
 
-  if (normalizedGroups != lastSyncedGroups) {
-    lastSyncedGroups = normalizedGroups
-    state.setGroups(normalizedGroups)
+  SideEffect {
+    if (lastSyncedGroupsRef.value != normalizedGroups) {
+      lastSyncedGroupsRef.value = normalizedGroups
+      state.setGroups(normalizedGroups)
+    }
   }
 
   val latestGroupsState = rememberUpdatedState(normalizedGroups)
-  LaunchedEffect(normalizedGroups, commitVersion, state.hasUncommittedDrag) {
-    if (commitVersion > 0 && !state.hasUncommittedDrag && latestGroupsState.value != state.groups) {
-      withFrameNanos {}
-      if (!state.hasUncommittedDrag && latestGroupsState.value != state.groups) {
-        state.setGroups(latestGroupsState.value)
-      }
+  LaunchedEffect(normalizedGroups, commitVersion) {
+    if (commitVersion == 0 || latestGroupsState.value == state.groups) return@LaunchedEffect
+    withFrameNanos {}
+    snapshotFlow { state.isGestureActive || state.hasUncommittedDrag }
+      .first { isBusy -> !isBusy }
+    if (latestGroupsState.value != state.groups) {
+      state.setGroups(latestGroupsState.value)
     }
   }
 
@@ -127,22 +132,23 @@ fun CalibrationView(
           getConfig = { getConfigState.value(it, currentSelectedSnapshot) },
         ) ?: return@awaitEachGesture
 
-        if (hit.groupIndex != currentSelectedIndex) {
-          state.selectGroup(hit.groupIndex)
-        }
-        val targetPoint = hit.point
-        down.consume()
-
-        val startX = Snapshot.withoutReadObservation { targetPoint.x }
-        val startY = Snapshot.withoutReadObservation { targetPoint.y }
         val dragGeneration = state.generation
-
-        val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ ->
-          change.consume()
-        } ?: return@awaitEachGesture
-
-        state.markDirty()
+        state.beginGesture()
         try {
+          if (hit.groupIndex != currentSelectedIndex) {
+            state.selectGroup(hit.groupIndex)
+          }
+          val targetPoint = hit.point
+          down.consume()
+
+          val startX = Snapshot.withoutReadObservation { targetPoint.x }
+          val startY = Snapshot.withoutReadObservation { targetPoint.y }
+
+          val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ ->
+            change.consume()
+          } ?: return@awaitEachGesture
+
+          state.markDirty()
           targetPoint.updateFromStart(
             startX = startX,
             startY = startY,
@@ -160,6 +166,7 @@ fun CalibrationView(
             )
           }
         } finally {
+          state.endGesture()
           state.commitDrag(dragGeneration)?.also { updatedGroups ->
             onValueChangeState.value?.invoke(updatedGroups)
           }
@@ -171,7 +178,7 @@ fun CalibrationView(
   }
 
   Canvas(modifier = canvasModifier) {
-    if (size.width <= 0f || size.height <= 0f) return@Canvas
+    if (!size.isValidContainerSize()) return@Canvas
 
     val renderGroups = state.renderGroups
     val selectedIndex = state.selectedGroupIndex
@@ -202,6 +209,10 @@ internal class TouchedPointHit(
   val groupIndex: Int,
   val point: RenderPoint,
   val distanceSquared: Float,
+)
+
+private class SyncedGroupsRef(
+  var value: List<CalibrationGroup>,
 )
 
 private const val MIN_TEXT_CACHE_SIZE = 64
@@ -309,7 +320,7 @@ internal fun RenderCalibration.findNearestTouchedPoint(
   containerSize: Size,
   touchedSize: Float,
 ): TouchedPointHit? {
-  if (containerSize.width <= 0f || containerSize.height <= 0f || touchedSize <= 0f) {
+  if (!containerSize.isValidContainerSize() || !touchedSize.isFinite() || touchedSize <= 0f) {
     return null
   }
   val radius = touchedSize / 2f
@@ -343,7 +354,7 @@ internal fun RenderPoint.updateFromStart(
   totalOffset: Offset,
   containerSize: Size,
 ) {
-  if (containerSize.width <= 0f || containerSize.height <= 0f) return
+  if (!containerSize.isValidContainerSize()) return
   update(
     x = startX + totalOffset.x / containerSize.width,
     y = startY + totalOffset.y / containerSize.height,

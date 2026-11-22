@@ -1,13 +1,17 @@
 package com.sd.lib.compose.calibration
 
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.unit.IntSize
 
-/** 标定绘制器 */
+/** 标定绘制器，自定义实现应保持无状态或不可变 */
+@Stable
 fun interface CalibrationDrawer {
   /** 绘制单个[calibration] */
   fun DrawScope.draw(
@@ -51,8 +55,13 @@ fun interface CalibrationDrawer {
 
 /** 标定点名称相对标定点的绘制方位 */
 enum class CalibrationPointNamePosition {
+  /** 位于标定点上方，文本左边缘与点中心对齐 */
   TopEnd,
+
+  /** 位于标定点下方，文本左边缘与点中心对齐 */
   BottomEnd,
+
+  /** 位于标定点右侧，文本垂直居中 */
   CenterEnd,
 }
 
@@ -62,7 +71,7 @@ fun CalibrationPoint.toComposeOffset(
   appendX: Float = 0f,
   appendY: Float = 0f,
 ): Offset {
-  if (containerSize.width <= 0f || containerSize.height <= 0f) return Offset.Zero
+  if (!containerSize.isValidContainerSize()) return Offset.Zero
   return Offset(
     x = x * containerSize.width + appendX,
     y = y * containerSize.height + appendY,
@@ -213,9 +222,17 @@ private fun DrawScope.drawPointNameTopEnd(
   config: CalibrationConfig,
   textLayoutResult: TextLayoutResult,
 ) {
+  val rawTopLeft = point.toComposeOffset(
+    containerSize = size,
+    appendY = -textLayoutResult.size.height.toFloat() - (config.pointSize.toPx() / 2f),
+  )
   drawText(
     textLayoutResult = textLayoutResult,
-    topLeft = point.toComposeOffset(size, appendY = -textLayoutResult.size.height.toFloat() - (config.pointSize.toPx() / 2f)),
+    topLeft = clampTextTopLeft(
+      topLeft = rawTopLeft,
+      textSize = textLayoutResult.size,
+      canvasSize = size,
+    ),
   )
 }
 
@@ -224,9 +241,17 @@ private fun DrawScope.drawPointNameBottomEnd(
   config: CalibrationConfig,
   textLayoutResult: TextLayoutResult,
 ) {
+  val rawTopLeft = point.toComposeOffset(
+    containerSize = size,
+    appendY = config.pointSize.toPx() / 2f,
+  )
   drawText(
     textLayoutResult = textLayoutResult,
-    topLeft = point.toComposeOffset(size, appendY = config.pointSize.toPx() / 2f),
+    topLeft = clampTextTopLeft(
+      topLeft = rawTopLeft,
+      textSize = textLayoutResult.size,
+      canvasSize = size,
+    ),
   )
 }
 
@@ -237,8 +262,36 @@ private fun DrawScope.drawPointNameCenterEnd(
 ) {
   val appendX = config.pointSize.toPx() / 2f + textLayoutResult.size.height.toFloat() / 4f
   val appendY = -textLayoutResult.size.height.toFloat() / 2f
+  val rawTopLeft = point.toComposeOffset(
+    containerSize = size,
+    appendX = appendX,
+    appendY = appendY,
+  )
   drawText(
     textLayoutResult = textLayoutResult,
-    topLeft = point.toComposeOffset(size, appendX = appendX, appendY = appendY),
+    topLeft = clampTextTopLeft(
+      topLeft = rawTopLeft,
+      textSize = textLayoutResult.size,
+      canvasSize = size,
+    ),
   )
+}
+
+/** 将文本左上角坐标限制在画布可视范围内 */
+internal fun clampTextTopLeft(
+  topLeft: Offset,
+  textSize: IntSize,
+  canvasSize: Size,
+): Offset {
+  if (!canvasSize.isValidContainerSize()) return topLeft
+  val maxX = (canvasSize.width - textSize.width.toFloat()).coerceAtLeast(0f)
+  val maxY = (canvasSize.height - textSize.height.toFloat()).coerceAtLeast(0f)
+  return Offset(
+    x = topLeft.x.coerceIn(0f, maxX),
+    y = topLeft.y.coerceIn(0f, maxY),
+  )
+}
+
+internal fun Size.isValidContainerSize(): Boolean {
+  return isSpecified && width.isFinite() && height.isFinite() && width > 0f && height > 0f
 }
