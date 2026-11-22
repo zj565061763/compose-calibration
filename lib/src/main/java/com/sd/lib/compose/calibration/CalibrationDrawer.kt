@@ -4,7 +4,9 @@ import androidx.compose.runtime.Stable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
@@ -103,35 +105,34 @@ private data class DefaultLineDrawer(
     textMeasurer: TextMeasurer,
   ) {
     val points = calibration.points
-    when {
-      points.size < 2 -> return
-      points.size == 2 -> {
+    if (points.size < 2) return
+    val strokeWidth = config.lineWidth.toPx()
+    if (strokeWidth <= 0f) return
+    if (points.size == 2) {
+      drawLine(
+        color = config.lineColor,
+        start = points.first().toComposeOffset(size),
+        end = points.last().toComposeOffset(size),
+        strokeWidth = strokeWidth,
+      )
+      return
+    }
+    points.forEachIndexed { index, point ->
+      val end = points.getOrNull(index + 1)
+      if (end != null) {
         drawLine(
           color = config.lineColor,
-          start = points.first().toComposeOffset(size),
-          end = points.last().toComposeOffset(size),
-          strokeWidth = config.lineWidth.toPx(),
+          start = point.toComposeOffset(size),
+          end = end.toComposeOffset(size),
+          strokeWidth = strokeWidth,
         )
-      }
-      else -> {
-        points.forEachIndexed { index, point ->
-          val end = points.getOrNull(index + 1)
-          if (end != null) {
-            drawLine(
-              color = config.lineColor,
-              start = point.toComposeOffset(size),
-              end = end.toComposeOffset(size),
-              strokeWidth = config.lineWidth.toPx(),
-            )
-          } else if (closeLines) {
-            drawLine(
-              color = config.lineColor,
-              start = point.toComposeOffset(size),
-              end = points.first().toComposeOffset(size),
-              strokeWidth = config.lineWidth.toPx(),
-            )
-          }
-        }
+      } else if (closeLines) {
+        drawLine(
+          color = config.lineColor,
+          start = point.toComposeOffset(size),
+          end = points.first().toComposeOffset(size),
+          strokeWidth = strokeWidth,
+        )
       }
     }
   }
@@ -143,10 +144,12 @@ private data object DefaultPointDrawer : CalibrationDrawer {
     config: CalibrationConfig,
     textMeasurer: TextMeasurer,
   ) {
+    val radius = config.pointSize.toPx() / 2f
+    if (radius <= 0f) return
     calibration.points.forEach { point ->
       drawCircle(
         color = config.pointColor,
-        radius = config.pointSize.toPx() / 2f,
+        radius = radius,
         center = point.toComposeOffset(size),
       )
     }
@@ -213,15 +216,23 @@ private fun DrawScope.drawPointName(
 ) {
   val topLeft = resolvePointNameTopLeft(
     pointCenter = point.toComposeOffset(size),
-    pointRadius = config.pointSize.toPx() / 2f,
+    pointRadius = (config.pointSize.toPx() / 2f).coerceAtLeast(0f),
     textSize = textLayoutResult.size,
     canvasSize = size,
     position = position,
   )
   drawText(
     textLayoutResult = textLayoutResult,
+    color = resolvePointNameColor(config),
     topLeft = topLeft,
   )
+}
+
+/** 解析点名称绘制颜色，样式未指定颜色且无画刷时回退为[CalibrationConfig.pointColor] */
+internal fun resolvePointNameColor(config: CalibrationConfig): Color {
+  return config.pointNameStyle.color.takeOrElse {
+    if (config.pointNameStyle.brush != null) Color.Unspecified else config.pointColor
+  }
 }
 
 /** 计算避开标定点并限制在画布可视范围内的文本左上角坐标 */

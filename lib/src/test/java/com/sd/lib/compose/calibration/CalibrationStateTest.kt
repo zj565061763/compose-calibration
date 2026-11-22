@@ -1,12 +1,27 @@
 package com.sd.lib.compose.calibration
 
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.sp
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -388,6 +403,145 @@ class CalibrationStateTest {
       CalibrationDrawer.defaultPointNameDrawer(CalibrationPointNamePosition.CenterEnd),
     )
   }
+
+  @Test
+  fun resolvePointNameColorFallsBackToPointColorWhenStyleColorUnspecified() {
+    // 默认配置使用 pointColor
+    assertEquals(
+      Color.Green,
+      resolvePointNameColor(CalibrationConfig(lineColor = Color.Green)),
+    )
+
+    // 自定义字号但未指定颜色时回退为 pointColor
+    assertEquals(
+      Color.Green,
+      resolvePointNameColor(
+        CalibrationConfig(
+          lineColor = Color.Green,
+          pointNameStyle = TextStyle(fontSize = 14.sp),
+        ),
+      ),
+    )
+
+    // 显式指定文本颜色时优先使用文本颜色
+    assertEquals(
+      Color.White,
+      resolvePointNameColor(
+        CalibrationConfig(
+          lineColor = Color.Green,
+          pointNameStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+        ),
+      ),
+    )
+
+    // 指定画刷且未指定纯色时保留 Color.Unspecified 以使画刷生效
+    val brushStyle = TextStyle(brush = Brush.linearGradient(listOf(Color.Red, Color.Yellow)))
+    assertEquals(
+      Color.Unspecified,
+      resolvePointNameColor(
+        CalibrationConfig(
+          lineColor = Color.Green,
+          pointNameStyle = brushStyle,
+        ),
+      ),
+    )
+  }
+
+  @Test
+  fun toImmutableSnapshotDetectsInPlaceSnapshotStateListMutations() {
+    val groupA = createRectGroups(id = "roi", x = 0.2f, y = 0.2f).single()
+    val groupB = createRectGroups(id = "roi", x = 0.6f, y = 0.6f).single()
+    val stateList = mutableStateListOf(groupA)
+
+    val snapshotBefore = stateList.toImmutableSnapshot()
+    stateList[0] = groupB
+    val snapshotAfter = stateList.toImmutableSnapshot()
+
+    assertNotEquals(snapshotBefore, snapshotAfter)
+    assertEquals(groupA, snapshotBefore.single())
+    assertEquals(groupB, snapshotAfter.single())
+  }
+
+  @Test
+  fun singlePointerDragStopsWhenPrimaryPointerLiftsWithoutHandingOffToSecondaryPointer() {
+    val primaryId = PointerId(1L)
+    val secondaryId = PointerId(2L)
+    val downPos = Offset(800f, 200f)
+
+    // 1. 主指针未过阈值即抬起时，即使副指针按住移动也不接管
+    val cancelledScope = FakeAwaitPointerEventScope(
+      initialEvent = PointerEvent(
+        listOf(
+          pointerChange(id = primaryId, pos = downPos, prevPos = downPos, pressed = true, prevPressed = false),
+          pointerChange(id = secondaryId, pos = Offset(50f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = false),
+        ),
+      ),
+      upcomingEvents = listOf(
+        PointerEvent(
+          listOf(
+            pointerChange(id = primaryId, pos = downPos, prevPos = downPos, pressed = false, prevPressed = true),
+            pointerChange(id = secondaryId, pos = Offset(120f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = true),
+          ),
+        ),
+      ),
+    )
+    var slopResult: PointerInputChange? = null
+    cancelledScope.runBlock {
+      slopResult = awaitTouchSlopForPointer(pointerId = primaryId, downPosition = downPos)
+    }
+    assertNull(slopResult)
+
+    // 2. 主指针跨越阈值并拖动后松手，副指针仍按住移动时立即停止且不跳位
+    val dragScope = FakeAwaitPointerEventScope(
+      initialEvent = PointerEvent(
+        listOf(
+          pointerChange(id = primaryId, pos = downPos, prevPos = downPos, pressed = true, prevPressed = false),
+          pointerChange(id = secondaryId, pos = Offset(50f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = false),
+        ),
+      ),
+      upcomingEvents = listOf(
+        PointerEvent(
+          listOf(
+            pointerChange(id = primaryId, pos = Offset(820f, 200f), prevPos = downPos, pressed = true, prevPressed = true),
+            pointerChange(id = secondaryId, pos = Offset(50f, 800f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = true),
+          ),
+        ),
+        PointerEvent(
+          listOf(
+            pointerChange(id = primaryId, pos = Offset(850f, 210f), prevPos = Offset(820f, 200f), pressed = true, prevPressed = true),
+            pointerChange(id = secondaryId, pos = Offset(55f, 805f), prevPos = Offset(50f, 800f), pressed = true, prevPressed = true),
+          ),
+        ),
+        PointerEvent(
+          listOf(
+            pointerChange(id = primaryId, pos = Offset(850f, 210f), prevPos = Offset(850f, 210f), pressed = false, prevPressed = true),
+            pointerChange(id = secondaryId, pos = Offset(60f, 810f), prevPos = Offset(55f, 805f), pressed = true, prevPressed = true),
+          ),
+        ),
+        PointerEvent(
+          listOf(
+            pointerChange(id = secondaryId, pos = Offset(100f, 850f), prevPos = Offset(60f, 810f), pressed = true, prevPressed = true),
+          ),
+        ),
+      ),
+    )
+
+    val recordedPositions = mutableListOf<Offset>()
+    dragScope.runBlock {
+      val slopChange = awaitTouchSlopForPointer(pointerId = primaryId, downPosition = downPos)
+      assertNotNull(slopChange)
+      recordedPositions.add(slopChange!!.position)
+      dragPointer(primaryId) { change ->
+        change.consume()
+        recordedPositions.add(change.position)
+      }
+    }
+
+    assertEquals(
+      listOf(Offset(820f, 200f), Offset(850f, 210f)),
+      recordedPositions,
+    )
+  }
 }
 
 private enum class TestSlot {
@@ -409,6 +563,100 @@ private object BundleCompatibleSaverScope : SaverScope {
   override fun canBeSaved(value: Any): Boolean {
     return isBundleCompatible(value)
   }
+}
+
+private class FakeAwaitPointerEventScope(
+  initialEvent: PointerEvent,
+  upcomingEvents: List<PointerEvent>,
+) : AwaitPointerEventScope {
+  private val _events = ArrayDeque(upcomingEvents)
+  private var _currentEvent: PointerEvent = initialEvent
+
+  override val density: Float
+    get() {
+      return 1f
+    }
+
+  override val fontScale: Float
+    get() {
+      return 1f
+    }
+
+  override val size: IntSize
+    get() {
+      return IntSize(1000, 1000)
+    }
+
+  override val currentEvent: PointerEvent
+    get() {
+      return _currentEvent
+    }
+
+  override val viewConfiguration: ViewConfiguration = object : ViewConfiguration {
+    override val longPressTimeoutMillis: Long
+      get() {
+        return 500L
+      }
+
+    override val doubleTapTimeoutMillis: Long
+      get() {
+        return 300L
+      }
+
+    override val doubleTapMinTimeMillis: Long
+      get() {
+        return 40L
+      }
+
+    override val touchSlop: Float
+      get() {
+        return 10f
+      }
+  }
+
+  override suspend fun awaitPointerEvent(pass: PointerEventPass): PointerEvent {
+    if (pass == PointerEventPass.Main && _events.isNotEmpty()) {
+      _currentEvent = _events.removeFirst()
+    }
+    return _currentEvent
+  }
+
+  fun runBlock(block: suspend AwaitPointerEventScope.() -> Unit) {
+    var failure: Throwable? = null
+    block.startCoroutine(
+      receiver = this,
+      completion = object : Continuation<Unit> {
+        override val context: kotlin.coroutines.CoroutineContext
+          get() {
+            return EmptyCoroutineContext
+          }
+
+        override fun resumeWith(result: Result<Unit>) {
+          failure = result.exceptionOrNull()
+        }
+      },
+    )
+    failure?.also { throw it }
+  }
+}
+
+private fun pointerChange(
+  id: PointerId,
+  pos: Offset,
+  prevPos: Offset,
+  pressed: Boolean,
+  prevPressed: Boolean,
+): PointerInputChange {
+  return PointerInputChange(
+    id = id,
+    uptimeMillis = 100L,
+    position = pos,
+    pressed = pressed,
+    previousUptimeMillis = 50L,
+    previousPosition = prevPos,
+    previousPressed = prevPressed,
+    isInitiallyConsumed = false,
+  )
 }
 
 private fun createRectGroups(

@@ -3,8 +3,6 @@ package com.sd.lib.compose.calibration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -19,7 +17,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
@@ -44,9 +48,10 @@ fun CalibrationView(
   getConfig: (current: Calibration, selected: CalibrationGroup?) -> CalibrationConfig = DefaultGetConfig,
   getDrawer: (Calibration) -> CalibrationDrawer = DefaultGetDrawer,
 ) {
-  val normalizedGroups = remember(groups) { groups.normalized() }
+  val groupsSnapshot = groups.toImmutableSnapshot()
+  val normalizedGroups = remember(groupsSnapshot) { groupsSnapshot.normalized() }
   val state = remember { CalibrationState(initialGroups = normalizedGroups) }
-  val lastSyncedGroupsRef = remember { SyncedGroupsRef(normalizedGroups) }
+  val lastSyncedGroupsRef = remember { ValueRef(normalizedGroups) }
   var commitVersion by remember { mutableIntStateOf(0) }
 
   SideEffect {
@@ -97,7 +102,10 @@ fun CalibrationView(
   getConfig: (current: Calibration, selected: CalibrationGroup?) -> CalibrationConfig = DefaultGetConfig,
   getDrawer: (Calibration) -> CalibrationDrawer = DefaultGetDrawer,
 ) {
-  val onValueChangeState = rememberUpdatedState(onValueChange)
+  val onValueChangeRef = remember(state) { ValueRef(onValueChange) }
+  SideEffect {
+    onValueChangeRef.value = onValueChange
+  }
   val getConfigState = rememberUpdatedState(getConfig)
   val getDrawerState = rememberUpdatedState(getDrawer)
   val textCacheSize = remember(state, state.generation) {
@@ -138,9 +146,10 @@ fun CalibrationView(
         val startY = Snapshot.withoutReadObservation { targetPoint.y }
         val dragGeneration = state.generation
 
-        val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ ->
-          change.consume()
-        } ?: return@awaitEachGesture
+        val touchSlopChange = awaitTouchSlopForPointer(
+          pointerId = down.id,
+          downPosition = down.position,
+        ) ?: return@awaitEachGesture
 
         state.markDirty()
         try {
@@ -151,7 +160,7 @@ fun CalibrationView(
             containerSize = size.toSize(),
           )
 
-          drag(touchSlopChange.id) { change ->
+          dragPointer(down.id) { change ->
             change.consume()
             targetPoint.updateFromStart(
               startX = startX,
@@ -162,7 +171,7 @@ fun CalibrationView(
           }
         } finally {
           state.commitDrag(dragGeneration)?.also { updatedGroups ->
-            onValueChangeState.value?.invoke(updatedGroups)
+            onValueChangeRef.value?.invoke(updatedGroups)
           }
         }
       }
@@ -205,8 +214,8 @@ internal class TouchedPointHit(
   val distanceSquared: Float,
 )
 
-private class SyncedGroupsRef(
-  var value: List<CalibrationGroup>,
+private class ValueRef<T>(
+  var value: T,
 )
 
 private const val MIN_TEXT_CACHE_SIZE = 64
@@ -353,4 +362,53 @@ internal fun RenderPoint.updateFromStart(
     x = startX + totalOffset.x / containerSize.width,
     y = startY + totalOffset.y / containerSize.height,
   )
+}
+
+internal suspend fun AwaitPointerEventScope.awaitTouchSlopForPointer(
+  pointerId: PointerId,
+  downPosition: Offset,
+): PointerInputChange? {
+  if (currentEvent.changes.firstOrNull { it.id == pointerId }?.pressed != true) {
+    return null
+  }
+  val touchSlop = viewConfiguration.touchSlop
+  val touchSlopSquared = touchSlop * touchSlop
+  while (true) {
+    val event = awaitPointerEvent()
+    val change = event.changes.firstOrNull { it.id == pointerId } ?: return null
+    if (change.isConsumed || change.changedToUpIgnoreConsumed()) {
+      return null
+    }
+    if ((change.position - downPosition).getDistanceSquared() >= touchSlopSquared) {
+      change.consume()
+      return change
+    }
+    awaitPointerEvent(PointerEventPass.Final)
+    if (change.isConsumed) {
+      return null
+    }
+  }
+}
+
+internal suspend inline fun AwaitPointerEventScope.dragPointer(
+  pointerId: PointerId,
+  onDrag: (PointerInputChange) -> Unit,
+) {
+  if (currentEvent.changes.firstOrNull { it.id == pointerId }?.pressed != true) {
+    return
+  }
+  while (true) {
+    val event = awaitPointerEvent()
+    val change = event.changes.firstOrNull { it.id == pointerId } ?: return
+    if (change.isConsumed) {
+      return
+    }
+    if (change.changedToUpIgnoreConsumed()) {
+      change.consume()
+      return
+    }
+    if (change.positionChangeIgnoreConsumed() != Offset.Zero) {
+      onDrag(change)
+    }
+  }
 }

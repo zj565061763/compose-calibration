@@ -21,7 +21,8 @@ fun rememberCalibrationState(
   initialGroups: List<CalibrationGroup> = emptyList(),
   key: Any? = null,
 ): CalibrationState {
-  val normalizedInitial = remember(initialGroups) { initialGroups.normalized() }
+  val initialSnapshot = initialGroups.toImmutableSnapshot()
+  val normalizedInitial = remember(initialSnapshot) { initialSnapshot.normalized() }
   val saver = remember(normalizedInitial, key) {
     createContextualSaver(
       expectedInitialGroups = normalizedInitial,
