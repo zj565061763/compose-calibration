@@ -5,24 +5,22 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 
 /**
  * 创建并记住支持导航返回、配置变更与进程重建保活的[CalibrationState]
  *
- * @param initialGroups 初始标定组列表，变化时会重置状态
- * @param key 附加标识（如机位标识），变化时会重置状态并隔离存档
+ * @param initialGroups 初始标定组列表，仅在首次初始化或[key]变化时生效，后续更新请调用[CalibrationState.setGroups]
+ * @param key 附加标识（如机位标识），变化时会重置状态
  */
 @Composable
 fun rememberCalibrationState(
   initialGroups: List<CalibrationGroup> = emptyList(),
   key: Any? = null,
 ): CalibrationState {
-  val normalizedInitial = remember(initialGroups) { initialGroups.normalized() }
-  return rememberSaveable(normalizedInitial, key, saver = CalibrationState.Saver) {
-    CalibrationState(initialGroups = normalizedInitial)
+  return rememberSaveable(key, saver = CalibrationState.Saver) {
+    CalibrationState(initialGroups = initialGroups)
   }
 }
 

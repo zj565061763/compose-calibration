@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
@@ -66,7 +67,9 @@ fun CalibrationView(
         val startX = targetPoint.x
         val startY = targetPoint.y
 
-        val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, _ ->
+        var totalOffset = Offset.Zero
+        val touchSlopChange = awaitTouchSlopOrCancellation(down.id) { change, overSlop ->
+          totalOffset = if (change.id == down.id) change.position - down.position else overSlop
           change.consume()
         } ?: return@awaitEachGesture
 
@@ -74,16 +77,17 @@ fun CalibrationView(
           targetPoint.updateFromStart(
             startX = startX,
             startY = startY,
-            totalOffset = touchSlopChange.position - down.position,
+            totalOffset = totalOffset,
             containerSize = size.toSize(),
           )
 
           drag(touchSlopChange.id) { change ->
+            totalOffset += change.positionChange()
             change.consume()
             targetPoint.updateFromStart(
               startX = startX,
               startY = startY,
-              totalOffset = change.position - down.position,
+              totalOffset = totalOffset,
               containerSize = size.toSize(),
             )
           }

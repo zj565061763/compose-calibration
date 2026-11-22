@@ -76,9 +76,8 @@ private fun SampleRoute(
     )
   }
 
-  val initialGroups = remember(selectedSlot) { slotGroupsMap.getValue(selectedSlot) }
   val calibrationState = rememberCalibrationState(
-    initialGroups = initialGroups,
+    initialGroups = slotGroupsMap.getValue(selectedSlot),
     key = selectedSlot,
   )
 
