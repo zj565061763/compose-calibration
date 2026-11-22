@@ -3,7 +3,6 @@ package com.sd.lib.compose.calibration
 import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -56,13 +55,13 @@ class CalibrationStateTest {
     val state = CalibrationState(initialGroups = initial)
     val snapshotBeforeDrag = state.groups
 
-    val gen = state.generation
-    state.renderGroups.first().calibrations.first().points.first().update(x = 0.6f, y = 0.7f)
+    val renderGroups = state.renderGroups
+    renderGroups.first().calibrations.first().points.first().update(x = 0.6f, y = 0.7f)
 
     // 提交前外部快照保持不变
     assertEquals(0.2f, state.groups.findPoints("roi")!!.first().x, 0f)
 
-    val committed = state.commitDrag(expectedGeneration = gen)
+    val committed = state.commitDrag(expectedRenderGroups = renderGroups)
     assertNotNull(committed)
     assertEquals(0.6f, committed!!.findPoints("roi")!!.first().x, 0f)
     assertEquals(0.7f, committed.findPoints("roi")!!.first().y, 0f)
@@ -77,10 +76,10 @@ class CalibrationStateTest {
     val initial = createRectGroups(id = "roi", x = 0f, y = 0f)
     val state = CalibrationState(initialGroups = initial)
 
-    val gen = state.generation
-    state.renderGroups.first().calibrations.first().points.first().update(x = -0.3f, y = -0.2f)
+    val renderGroups = state.renderGroups
+    renderGroups.first().calibrations.first().points.first().update(x = -0.3f, y = -0.2f)
 
-    val committed = state.commitDrag(expectedGeneration = gen)
+    val committed = state.commitDrag(expectedRenderGroups = renderGroups)
     assertNull(committed)
   }
 
@@ -90,14 +89,14 @@ class CalibrationStateTest {
     val slotBGroups = createRectGroups(id = "slot_b", x = 0.5f, y = 0.5f)
     val state = CalibrationState(initialGroups = slotAGroups)
 
-    val staleGen = state.generation
-    state.renderGroups.first().calibrations.first().points.first().update(x = 0.8f, y = 0.8f)
+    val staleRenderGroups = state.renderGroups
+    staleRenderGroups.first().calibrations.first().points.first().update(x = 0.8f, y = 0.8f)
 
     // 拖拽途中外部切换到新机位
     state.setGroups(slotBGroups)
 
     // 旧手势在 finally 中提交时应被忽略，不覆盖新机位数据
-    val staleCommit = state.commitDrag(expectedGeneration = staleGen)
+    val staleCommit = state.commitDrag(expectedRenderGroups = staleRenderGroups)
     assertNull(staleCommit)
     assertEquals(slotBGroups, state.groups)
   }
@@ -318,55 +317,25 @@ class CalibrationStateTest {
   }
 
   @Test
-  fun contextualSaverRestoresWhenInitialAndKeyMatchAndDiscardsOnChange() {
+  fun saverRestoresDraggedGroupsAndSelectedIndex() {
     val defaultGroups = createRectGroups(id = "roi", x = 0.2f, y = 0.3f)
     val state = CalibrationState(initialGroups = defaultGroups)
     state.selectGroup(0)
-    val gen = state.generation
-    state.renderGroups.first().calibrations.first().points.first().update(x = 0.75f, y = 0.85f)
-    state.commitDrag(gen)
+    val renderGroups = state.renderGroups
+    renderGroups.first().calibrations.first().points.first().update(x = 0.75f, y = 0.85f)
+    state.commitDrag(renderGroups)
 
-    val preFinishSaver = createContextualSaver(
-      expectedInitialGroups = defaultGroups,
-      expectedKey = TestSlot.PreFinish,
-    )
-    val saved = with(preFinishSaver) {
+    val saved = with(CalibrationState.Saver) {
       BundleCompatibleSaverScope.save(state)
     }
     assertNotNull(saved)
     assertTrue(BundleCompatibleSaverScope.canBeSaved(saved!!))
 
-    // 通用 Saver 同样可保存恢复且仅含 Bundle 兼容类型
-    val standaloneSaved = with(CalibrationState.Saver) {
-      BundleCompatibleSaverScope.save(state)
-    }
-    assertNotNull(standaloneSaved)
-    assertTrue(BundleCompatibleSaverScope.canBeSaved(standaloneSaved!!))
-    val standaloneRestored = CalibrationState.Saver.restore(standaloneSaved)
-    assertNotNull(standaloneRestored)
-    assertEquals(state.groups, standaloneRestored!!.groups)
-    assertEquals(0, standaloneRestored.selectedGroupIndex)
-
-    // 1. 常规压栈返回 / 重建（initialGroups 与带匿名子类的枚举 key 均未变）：恢复拖拽后的点位与选中项
-    val restoredSameSlot = preFinishSaver.restore(saved)
-    assertNotNull(restoredSameSlot)
-    assertEquals(0.75f, restoredSameSlot!!.groups.findPoints("roi")!!.first().x, 0f)
-    assertEquals(0.85f, restoredSameSlot.groups.findPoints("roi")!!.first().y, 0f)
-    assertEquals(0, restoredSameSlot.selectedGroupIndex)
-
-    // 2. 跨页面导致机位从 PreFinish 切到 Finish（即使默认坐标与 id 完全相同）：丢弃旧存档
-    val finishSaver = createContextualSaver(
-      expectedInitialGroups = defaultGroups,
-      expectedKey = TestSlot.Finish,
-    )
-    assertNull(finishSaver.restore(saved))
-
-    // 3. 子页面修改了初始默认点位：丢弃旧存档
-    val updatedDefaultSaver = createContextualSaver(
-      expectedInitialGroups = createRectGroups(id = "roi", x = 0.4f, y = 0.4f),
-      expectedKey = TestSlot.PreFinish,
-    )
-    assertNull(updatedDefaultSaver.restore(saved))
+    val restored = CalibrationState.Saver.restore(saved)
+    assertNotNull(restored)
+    assertEquals(0.75f, restored!!.groups.findPoints("roi")!!.first().x, 0f)
+    assertEquals(0.85f, restored.groups.findPoints("roi")!!.first().y, 0f)
+    assertEquals(0, restored.selectedGroupIndex)
   }
 
   @Test
@@ -408,18 +377,6 @@ class CalibrationStateTest {
         CalibrationConfig(
           lineColor = Color.Green,
           pointNameStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-        ),
-      ),
-    )
-
-    // 指定画刷且未指定纯色时保留 Color.Unspecified 以使画刷生效
-    val brushStyle = TextStyle(brush = Brush.linearGradient(listOf(Color.Red, Color.Yellow)))
-    assertEquals(
-      Color.Unspecified,
-      resolvePointNameColor(
-        CalibrationConfig(
-          lineColor = Color.Green,
-          pointNameStyle = brushStyle,
         ),
       ),
     )
@@ -505,21 +462,6 @@ class CalibrationStateTest {
       recordedPositions,
     )
   }
-}
-
-private enum class TestSlot {
-  PreFinish {
-    override fun label(): String {
-      return "pre"
-    }
-  },
-  Finish {
-    override fun label(): String {
-      return "finish"
-    }
-  };
-
-  abstract fun label(): String
 }
 
 private object BundleCompatibleSaverScope : SaverScope {

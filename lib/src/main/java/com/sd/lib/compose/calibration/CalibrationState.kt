@@ -14,7 +14,7 @@ import androidx.compose.runtime.snapshots.Snapshot
  * 创建并记住支持导航返回、配置变更与进程重建保活的[CalibrationState]
  *
  * @param initialGroups 初始标定组列表，变化时会重置状态
- * @param key 附加标识（如机位标识），变化时会重置状态并隔离存档，需具备稳定的 `toString()` 表示（如基本类型、`String`、`Enum` 或 `data class`）
+ * @param key 附加标识（如机位标识），变化时会重置状态并隔离存档
  */
 @Composable
 fun rememberCalibrationState(
@@ -22,13 +22,7 @@ fun rememberCalibrationState(
   key: Any? = null,
 ): CalibrationState {
   val normalizedInitial = remember(initialGroups) { initialGroups.normalized() }
-  val saver = remember(normalizedInitial, key) {
-    createContextualSaver(
-      expectedInitialGroups = normalizedInitial,
-      expectedKey = key,
-    )
-  }
-  return rememberSaveable(normalizedInitial, key, saver = saver) {
+  return rememberSaveable(normalizedInitial, key, saver = CalibrationState.Saver) {
     CalibrationState(initialGroups = normalizedInitial)
   }
 }
@@ -45,7 +39,6 @@ class CalibrationState(
   private val _groupsState = mutableStateOf<List<CalibrationGroup>>(emptyList())
   private val _renderGroupsState = mutableStateOf<List<RenderGroup>>(emptyList())
   private val _selectedGroupIndexState = mutableIntStateOf(-1)
-  private val _generationState = mutableIntStateOf(0)
 
   /** 当前标定组不可变快照，坐标范围为 `[0f, 1f]` */
   val groups: List<CalibrationGroup>
@@ -67,11 +60,6 @@ class CalibrationState(
   internal val selectedGroupIndex: Int
     get() {
       return _selectedGroupIndexState.intValue
-    }
-
-  internal val generation: Int
-    get() {
-      return _generationState.intValue
     }
 
   /** 获取当前标定组不可变快照 */
@@ -96,7 +84,6 @@ class CalibrationState(
       normalized.getOrNull(previousIndex)?.calibrationIds() == previousSelectedIds -> previousIndex
       else -> normalized.indexOfFirst { it.calibrationIds() == previousSelectedIds }
     }
-    _generationState.intValue++
   }
 
   /** 清除当前选中的标定组 */
@@ -108,13 +95,14 @@ class CalibrationState(
     _selectedGroupIndexState.intValue = if (index in _renderGroupsState.value.indices) index else -1
   }
 
-  /** 提交指定[expectedGeneration]的手势修改，坐标有实际变化时更新[groups]并返回新快照 */
-  internal fun commitDrag(expectedGeneration: Int): List<CalibrationGroup>? {
-    if (expectedGeneration != _generationState.intValue) {
+  /** 提交指定[expectedRenderGroups]的手势修改，坐标有实际变化时更新[groups]并返回新快照 */
+  internal fun commitDrag(expectedRenderGroups: List<RenderGroup>): List<CalibrationGroup>? {
+    val currentRenderGroups = Snapshot.withoutReadObservation { _renderGroupsState.value }
+    if (expectedRenderGroups !== currentRenderGroups) {
       return null
     }
     val updated = Snapshot.withoutReadObservation {
-      _renderGroupsState.value.map { it.toCalibrationGroup() }
+      currentRenderGroups.map { it.toCalibrationGroup() }
     }
     if (updated == _groupsState.value) {
       return null
@@ -208,45 +196,6 @@ internal class RenderPoint(
   }
 }
 
-/** 创建校验初始基准与[expectedKey]的[Saver]，防止跨机位或默认值变更后误恢复旧存档 */
-internal fun createContextualSaver(
-  expectedInitialGroups: List<CalibrationGroup>,
-  expectedKey: Any?,
-): Saver<CalibrationState, Any> {
-  val expectedKeyToken = expectedKey.toSaveableKeyToken()
-  return Saver(
-    save = { state ->
-      val currentSnapshot = Snapshot.withoutReadObservation {
-        state.renderGroups.map { it.toCalibrationGroup() }
-      }
-      arrayListOf<Any?>(
-        serializeGroups(expectedInitialGroups),
-        serializeGroups(currentSnapshot),
-        Snapshot.withoutReadObservation { state.selectedGroupIndex },
-        expectedKeyToken,
-      )
-    },
-    restore = { raw ->
-      val list = raw as? List<*> ?: return@Saver null
-      if (list.size != 4) return@Saver null
-      val savedInitialGroups = deserializeGroups(list[0]) ?: return@Saver null
-      val savedCurrentGroups = deserializeGroups(list[1]) ?: return@Saver null
-      val savedSelectedIndex = list[2] as? Int ?: -1
-      val savedKeyToken = if (list[3] == null) {
-        null
-      } else {
-        list[3] as? String ?: return@Saver null
-      }
-      if (savedInitialGroups != expectedInitialGroups || savedKeyToken != expectedKeyToken) {
-        return@Saver null
-      }
-      CalibrationState(initialGroups = savedCurrentGroups).also { state ->
-        state.selectGroup(savedSelectedIndex)
-      }
-    },
-  )
-}
-
 private fun CalibrationGroup.calibrationIds(): List<String> {
   return calibrations.map { it.id }
 }
@@ -313,12 +262,4 @@ private fun deserializeGroups(raw: Any?): List<CalibrationGroup>? {
     groups.add(CalibrationGroup(calibrations = calibrations))
   }
   return groups
-}
-
-private fun Any?.toSaveableKeyToken(): String? {
-  if (this == null) return null
-  return when (this) {
-    is Enum<*> -> "${declaringJavaClass.name}:$name"
-    else -> "${javaClass.name}:$this"
-  }
 }

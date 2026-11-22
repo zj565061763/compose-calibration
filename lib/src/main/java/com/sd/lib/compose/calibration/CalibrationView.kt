@@ -45,18 +45,17 @@ fun CalibrationView(
   val onValueChangeState = rememberUpdatedState(onValueChange)
   val getConfigState = rememberUpdatedState(getConfig)
   val getDrawerState = rememberUpdatedState(getDrawer)
-  val textCacheSize = remember(state, state.generation) {
-    val totalPoints = Snapshot.withoutReadObservation {
-      state.renderGroups.sumOf { group ->
-        group.calibrations.sumOf { calibration -> calibration.points.size }
-      }
+  val currentRenderGroups = state.renderGroups
+  val textCacheSize = remember(currentRenderGroups) {
+    val totalPoints = currentRenderGroups.sumOf { group ->
+      group.calibrations.sumOf { calibration -> calibration.points.size }
     }
     maxOf(MIN_TEXT_CACHE_SIZE, totalPoints * 2)
   }
   val textMeasurer = rememberTextMeasurer(cacheSize = textCacheSize)
 
   val canvasModifier = if (enabled) {
-    modifier.pointerInput(state, state.generation) {
+    modifier.pointerInput(state, currentRenderGroups) {
       awaitEachGesture {
         val down = awaitFirstDown()
         val currentGroups = state.renderGroups
@@ -81,7 +80,6 @@ fun CalibrationView(
 
         val startX = Snapshot.withoutReadObservation { targetPoint.x }
         val startY = Snapshot.withoutReadObservation { targetPoint.y }
-        val dragGeneration = state.generation
 
         val touchSlopChange = awaitTouchSlopForPointer(
           pointerId = down.id,
@@ -106,7 +104,7 @@ fun CalibrationView(
             )
           }
         } finally {
-          state.commitDrag(dragGeneration)?.also { updatedGroups ->
+          state.commitDrag(currentGroups)?.also { updatedGroups ->
             onValueChangeState.value?.invoke(updatedGroups)
           }
         }

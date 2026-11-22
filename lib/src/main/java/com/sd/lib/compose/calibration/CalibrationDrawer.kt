@@ -108,29 +108,14 @@ private data class DefaultLineDrawer(
     if (points.size < 2) return
     val strokeWidth = config.lineWidth.toPx()
     if (strokeWidth <= 0f) return
-    if (points.size == 2) {
-      drawLine(
-        color = config.lineColor,
-        start = points.first().toComposeOffset(size),
-        end = points.last().toComposeOffset(size),
-        strokeWidth = strokeWidth,
-      )
-      return
-    }
+    val shouldClose = closeLines && points.size > 2
     points.forEachIndexed { index, point ->
-      val end = points.getOrNull(index + 1)
+      val end = points.getOrNull(index + 1) ?: if (shouldClose) points.first() else null
       if (end != null) {
         drawLine(
           color = config.lineColor,
           start = point.toComposeOffset(size),
           end = end.toComposeOffset(size),
-          strokeWidth = strokeWidth,
-        )
-      } else if (closeLines) {
-        drawLine(
-          color = config.lineColor,
-          start = point.toComposeOffset(size),
-          end = points.first().toComposeOffset(size),
           strokeWidth = strokeWidth,
         )
       }
@@ -165,45 +150,22 @@ private data class DefaultPointNameDrawer(
     textMeasurer: TextMeasurer,
   ) {
     val points = calibration.points
-    when {
-      points.isEmpty() -> return
-      points.size == 1 -> {
-        val point = points.first()
-        if (point.name.isEmpty()) return
-        val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
-        drawPointName(
-          point = point,
-          config = config,
-          textLayoutResult = textLayoutResult,
-          position = position ?: CalibrationPointNamePosition.TopEnd,
-        )
+    if (points.isEmpty()) return
+    val topCount = if (points.size == 1) 1 else points.size / 2
+    points.forEachIndexed { index, point ->
+      if (point.name.isEmpty()) return@forEachIndexed
+      val resolvedPosition = position ?: if (index < topCount) {
+        CalibrationPointNamePosition.TopEnd
+      } else {
+        CalibrationPointNamePosition.BottomEnd
       }
-      else -> {
-        if (position != null) {
-          points.forEach { point ->
-            if (point.name.isEmpty()) return@forEach
-            val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
-            drawPointName(
-              point = point,
-              config = config,
-              textLayoutResult = textLayoutResult,
-              position = position,
-            )
-          }
-        } else {
-          val half = points.size / 2
-          points.forEachIndexed { index, point ->
-            if (point.name.isEmpty()) return@forEachIndexed
-            val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
-            drawPointName(
-              point = point,
-              config = config,
-              textLayoutResult = textLayoutResult,
-              position = if (index < half) CalibrationPointNamePosition.TopEnd else CalibrationPointNamePosition.BottomEnd,
-            )
-          }
-        }
-      }
+      val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
+      drawPointName(
+        point = point,
+        config = config,
+        textLayoutResult = textLayoutResult,
+        position = resolvedPosition,
+      )
     }
   }
 }
@@ -228,11 +190,9 @@ private fun DrawScope.drawPointName(
   )
 }
 
-/** 解析点名称绘制颜色，样式未指定颜色且无画刷时回退为[CalibrationConfig.pointColor] */
+/** 解析点名称绘制颜色，样式未指定颜色时回退为[CalibrationConfig.pointColor] */
 internal fun resolvePointNameColor(config: CalibrationConfig): Color {
-  return config.pointNameStyle.color.takeOrElse {
-    if (config.pointNameStyle.brush != null) Color.Unspecified else config.pointColor
-  }
+  return config.pointNameStyle.color.takeOrElse { config.pointColor }
 }
 
 /** 计算避开标定点并限制在画布可视范围内的文本左上角坐标 */
