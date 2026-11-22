@@ -192,11 +192,12 @@ private data class DefaultPointNameDrawer(
           points.forEachIndexed { index, point ->
             if (point.name.isEmpty()) return@forEachIndexed
             val textLayoutResult = textMeasurer.measure(text = point.name, style = config.pointNameStyle)
-            if (index < half) {
-              drawPointNameTopEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-            } else {
-              drawPointNameBottomEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-            }
+            drawPointName(
+              point = point,
+              config = config,
+              textLayoutResult = textLayoutResult,
+              position = if (index < half) CalibrationPointNamePosition.TopEnd else CalibrationPointNamePosition.BottomEnd,
+            )
           }
         }
       }
@@ -210,85 +211,55 @@ private fun DrawScope.drawPointName(
   textLayoutResult: TextLayoutResult,
   position: CalibrationPointNamePosition,
 ) {
-  when (position) {
-    CalibrationPointNamePosition.TopEnd -> drawPointNameTopEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-    CalibrationPointNamePosition.BottomEnd -> drawPointNameBottomEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-    CalibrationPointNamePosition.CenterEnd -> drawPointNameCenterEnd(point = point, config = config, textLayoutResult = textLayoutResult)
-  }
-}
-
-private fun DrawScope.drawPointNameTopEnd(
-  point: CalibrationPoint,
-  config: CalibrationConfig,
-  textLayoutResult: TextLayoutResult,
-) {
-  val rawTopLeft = point.toComposeOffset(
-    containerSize = size,
-    appendY = -textLayoutResult.size.height.toFloat() - (config.pointSize.toPx() / 2f),
+  val topLeft = resolvePointNameTopLeft(
+    pointCenter = point.toComposeOffset(size),
+    pointRadius = config.pointSize.toPx() / 2f,
+    textSize = textLayoutResult.size,
+    canvasSize = size,
+    position = position,
   )
   drawText(
     textLayoutResult = textLayoutResult,
-    topLeft = clampTextTopLeft(
-      topLeft = rawTopLeft,
-      textSize = textLayoutResult.size,
-      canvasSize = size,
-    ),
+    topLeft = topLeft,
   )
 }
 
-private fun DrawScope.drawPointNameBottomEnd(
-  point: CalibrationPoint,
-  config: CalibrationConfig,
-  textLayoutResult: TextLayoutResult,
-) {
-  val rawTopLeft = point.toComposeOffset(
-    containerSize = size,
-    appendY = config.pointSize.toPx() / 2f,
-  )
-  drawText(
-    textLayoutResult = textLayoutResult,
-    topLeft = clampTextTopLeft(
-      topLeft = rawTopLeft,
-      textSize = textLayoutResult.size,
-      canvasSize = size,
-    ),
-  )
-}
-
-private fun DrawScope.drawPointNameCenterEnd(
-  point: CalibrationPoint,
-  config: CalibrationConfig,
-  textLayoutResult: TextLayoutResult,
-) {
-  val appendX = config.pointSize.toPx() / 2f + textLayoutResult.size.height.toFloat() / 4f
-  val appendY = -textLayoutResult.size.height.toFloat() / 2f
-  val rawTopLeft = point.toComposeOffset(
-    containerSize = size,
-    appendX = appendX,
-    appendY = appendY,
-  )
-  drawText(
-    textLayoutResult = textLayoutResult,
-    topLeft = clampTextTopLeft(
-      topLeft = rawTopLeft,
-      textSize = textLayoutResult.size,
-      canvasSize = size,
-    ),
-  )
-}
-
-/** 将文本左上角坐标限制在画布可视范围内 */
-internal fun clampTextTopLeft(
-  topLeft: Offset,
+/** 计算避开标定点并限制在画布可视范围内的文本左上角坐标 */
+internal fun resolvePointNameTopLeft(
+  pointCenter: Offset,
+  pointRadius: Float,
   textSize: IntSize,
   canvasSize: Size,
+  position: CalibrationPointNamePosition,
 ): Offset {
-  if (!canvasSize.isValidContainerSize()) return topLeft
-  val maxX = (canvasSize.width - textSize.width.toFloat()).coerceAtLeast(0f)
-  val maxY = (canvasSize.height - textSize.height.toFloat()).coerceAtLeast(0f)
+  if (!canvasSize.isValidContainerSize()) return pointCenter
+  val textWidth = textSize.width.toFloat()
+  val textHeight = textSize.height.toFloat()
+  val rawX: Float
+  val rawY: Float
+  when (position) {
+    CalibrationPointNamePosition.TopEnd -> {
+      rawX = pointCenter.x
+      val topY = pointCenter.y - pointRadius - textHeight
+      rawY = if (topY < 0f) pointCenter.y + pointRadius else topY
+    }
+    CalibrationPointNamePosition.BottomEnd -> {
+      rawX = pointCenter.x
+      val bottomY = pointCenter.y + pointRadius
+      rawY = if (bottomY + textHeight > canvasSize.height) pointCenter.y - pointRadius - textHeight else bottomY
+    }
+    CalibrationPointNamePosition.CenterEnd -> {
+      val gapX = pointRadius + textHeight / 4f
+      val rightX = pointCenter.x + gapX
+      rawX = if (rightX + textWidth > canvasSize.width) pointCenter.x - gapX - textWidth else rightX
+      rawY = pointCenter.y - textHeight / 2f
+    }
+  }
+  val maxX = (canvasSize.width - textWidth).coerceAtLeast(0f)
+  val maxY = (canvasSize.height - textHeight).coerceAtLeast(0f)
   return Offset(
-    x = topLeft.x.coerceIn(0f, maxX),
-    y = topLeft.y.coerceIn(0f, maxY),
+    x = rawX.coerceIn(0f, maxX),
+    y = rawY.coerceIn(0f, maxY),
   )
 }
 

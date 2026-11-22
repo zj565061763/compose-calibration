@@ -46,7 +46,6 @@ class CalibrationState(
   private val _renderGroupsState = mutableStateOf<List<RenderGroup>>(emptyList())
   private val _selectedGroupIndexState = mutableIntStateOf(-1)
   private val _generationState = mutableIntStateOf(0)
-  private val _activeGestureCountState = mutableIntStateOf(0)
   private val _hasUncommittedDragState = mutableStateOf(false)
 
   /** 当前标定组不可变快照，坐标范围为 `[0f, 1f]` */
@@ -74,11 +73,6 @@ class CalibrationState(
   internal val generation: Int
     get() {
       return _generationState.intValue
-    }
-
-  internal val isGestureActive: Boolean
-    get() {
-      return _activeGestureCountState.intValue > 0
     }
 
   internal val hasUncommittedDrag: Boolean
@@ -122,14 +116,6 @@ class CalibrationState(
     _selectedGroupIndexState.intValue = if (index in _renderGroupsState.value.indices) index else -1
   }
 
-  internal fun beginGesture() {
-    _activeGestureCountState.intValue++
-  }
-
-  internal fun endGesture() {
-    _activeGestureCountState.intValue = (_activeGestureCountState.intValue - 1).coerceAtLeast(0)
-  }
-
   internal fun markDirty() {
     _hasUncommittedDragState.value = true
   }
@@ -137,9 +123,6 @@ class CalibrationState(
   /** 提交指定[expectedGeneration]的手势修改，坐标有实际变化时更新[groups]并返回新快照 */
   internal fun commitDrag(expectedGeneration: Int): List<CalibrationGroup>? {
     if (expectedGeneration != _generationState.intValue) {
-      return null
-    }
-    if (!Snapshot.withoutReadObservation { _hasUncommittedDragState.value }) {
       return null
     }
     _hasUncommittedDragState.value = false

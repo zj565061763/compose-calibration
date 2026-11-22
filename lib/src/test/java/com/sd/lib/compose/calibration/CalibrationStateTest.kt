@@ -44,22 +44,12 @@ class CalibrationStateTest {
     val snapshotBeforeDrag = state.groups
 
     val gen = state.generation
-    state.beginGesture()
-    assertTrue(state.isGestureActive)
-
-    // 仅按下未跨过 touchSlop（未调用 markDirty）时提交返回 null
-    state.endGesture()
-    assertFalse(state.isGestureActive)
-    assertNull(state.commitDrag(expectedGeneration = gen))
-
-    state.beginGesture()
     state.markDirty()
     state.renderGroups.first().calibrations.first().points.first().update(x = 0.6f, y = 0.7f)
 
     // 提交前外部快照保持不变
     assertEquals(0.2f, state.groups.findPoints("roi")!!.first().x, 0f)
 
-    state.endGesture()
     val committed = state.commitDrag(expectedGeneration = gen)
     assertNotNull(committed)
     assertEquals(0.6f, committed!!.findPoints("roi")!!.first().x, 0f)
@@ -197,24 +187,45 @@ class CalibrationStateTest {
   }
 
   @Test
-  fun clampTextTopLeftKeepsPointNameInsideCanvasBounds() {
+  fun resolvePointNameTopLeftAvoidsPointAndStaysInsideCanvasBounds() {
     val canvasSize = Size(200f, 100f)
     val textSize = IntSize(40, 20)
+    val pointRadius = 8f
 
-    // 顶部与右侧溢出时夹紧到画布内侧边缘
+    // TopEnd 贴近顶部与右边缘：翻到点下方（y = 0 + 8 = 8），x 夹紧到 200 - 40 = 160，不压住圆点
     assertEquals(
-      Offset(160f, 0f),
-      clampTextTopLeft(topLeft = Offset(195f, -24f), textSize = textSize, canvasSize = canvasSize),
+      Offset(160f, 8f),
+      resolvePointNameTopLeft(
+        pointCenter = Offset(200f, 0f),
+        pointRadius = pointRadius,
+        textSize = textSize,
+        canvasSize = canvasSize,
+        position = CalibrationPointNamePosition.TopEnd,
+      ),
     )
-    // 底部与左侧溢出时夹紧到画布内侧边缘
+
+    // BottomEnd 贴近底部边缘：翻到点上方（y = 100 - 8 - 20 = 72），不压住圆点
     assertEquals(
-      Offset(0f, 80f),
-      clampTextTopLeft(topLeft = Offset(-10f, 104f), textSize = textSize, canvasSize = canvasSize),
+      Offset(100f, 72f),
+      resolvePointNameTopLeft(
+        pointCenter = Offset(100f, 100f),
+        pointRadius = pointRadius,
+        textSize = textSize,
+        canvasSize = canvasSize,
+        position = CalibrationPointNamePosition.BottomEnd,
+      ),
     )
-    // 画布尺寸小于文本尺寸时夹紧到原点，不抛空区间异常
+
+    // CenterEnd 贴近右侧边缘：翻到点左侧（gapX = 8 + 5 = 13，x = 200 - 13 - 40 = 147），不压住圆点
     assertEquals(
-      Offset(0f, 0f),
-      clampTextTopLeft(topLeft = Offset(10f, 10f), textSize = IntSize(300, 200), canvasSize = canvasSize),
+      Offset(147f, 40f),
+      resolvePointNameTopLeft(
+        pointCenter = Offset(200f, 50f),
+        pointRadius = pointRadius,
+        textSize = textSize,
+        canvasSize = canvasSize,
+        position = CalibrationPointNamePosition.CenterEnd,
+      ),
     )
   }
 
