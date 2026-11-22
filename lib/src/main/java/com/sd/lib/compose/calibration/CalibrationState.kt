@@ -75,6 +75,11 @@ class CalibrationState(
       return _generationState.intValue
     }
 
+  internal val hasUncommittedDrag: Boolean
+    get() {
+      return _hasUncommittedDragState.value
+    }
+
   /** 获取当前标定组不可变快照 */
   @Deprecated("请直接读取 groups 属性", ReplaceWith("groups"))
   fun getCurrentGroups(): List<CalibrationGroup> {

@@ -17,7 +17,6 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -56,10 +55,10 @@ fun CalibrationView(
   }
 
   val latestGroupsState = rememberUpdatedState(normalizedGroups)
-  LaunchedEffect(normalizedGroups, commitVersion) {
-    if (commitVersion > 0 && latestGroupsState.value != state.groups) {
+  LaunchedEffect(normalizedGroups, commitVersion, state.hasUncommittedDrag) {
+    if (commitVersion > 0 && !state.hasUncommittedDrag && latestGroupsState.value != state.groups) {
       withFrameNanos {}
-      if (latestGroupsState.value != state.groups) {
+      if (!state.hasUncommittedDrag && latestGroupsState.value != state.groups) {
         state.setGroups(latestGroupsState.value)
       }
     }
@@ -120,33 +119,18 @@ fun CalibrationView(
           currentGroups.getOrNull(currentSelectedIndex)?.toCalibrationGroup()
         }
 
-        var touchedPoint = currentGroups.getOrNull(currentSelectedIndex)?.let { group ->
-          findTouchedPoint(
-            group = group,
-            touched = down.position,
-            containerSize = size.toSize(),
-            getConfig = { getConfigState.value(it, currentSelectedSnapshot) },
-          )
-        }
+        val hit = findNearestTouchedPoint(
+          groups = currentGroups,
+          selectedGroupIndex = currentSelectedIndex,
+          touched = down.position,
+          containerSize = size.toSize(),
+          getConfig = { getConfigState.value(it, currentSelectedSnapshot) },
+        ) ?: return@awaitEachGesture
 
-        if (touchedPoint == null) {
-          for (index in currentGroups.indices.reversed()) {
-            if (index == currentSelectedIndex) continue
-            val group = currentGroups[index]
-            touchedPoint = findTouchedPoint(
-              group = group,
-              touched = down.position,
-              containerSize = size.toSize(),
-              getConfig = { getConfigState.value(it, currentSelectedSnapshot) },
-            )
-            if (touchedPoint != null) {
-              state.selectGroup(index)
-              break
-            }
-          }
+        if (hit.groupIndex != currentSelectedIndex) {
+          state.selectGroup(hit.groupIndex)
         }
-
-        val targetPoint = touchedPoint ?: return@awaitEachGesture
+        val targetPoint = hit.point
         down.consume()
 
         val startX = Snapshot.withoutReadObservation { targetPoint.x }
@@ -214,6 +198,12 @@ fun CalibrationView(
   }
 }
 
+internal class TouchedPointHit(
+  val groupIndex: Int,
+  val point: RenderPoint,
+  val distanceSquared: Float,
+)
+
 private const val MIN_TEXT_CACHE_SIZE = 64
 
 private val DefaultGetConfig: (Calibration, CalibrationGroup?) -> CalibrationConfig = { current, selected ->
@@ -243,41 +233,105 @@ private inline fun DrawScope.drawRenderGroup(
   }
 }
 
-/** 按绘制逆序在标定组中查找最上层命中的顶点 */
-private inline fun Density.findTouchedPoint(
+/** 按最近距离与视觉绘制层级在所有标定组中查找命中的顶点 */
+internal inline fun Density.findNearestTouchedPoint(
+  groups: List<RenderGroup>,
+  selectedGroupIndex: Int,
+  touched: Offset,
+  containerSize: Size,
+  getConfig: (Calibration) -> CalibrationConfig,
+): TouchedPointHit? {
+  var bestHit: TouchedPointHit? = null
+
+  groups.getOrNull(selectedGroupIndex)?.also { selectedGroup ->
+    findNearestTouchedPointInGroup(
+      groupIndex = selectedGroupIndex,
+      group = selectedGroup,
+      touched = touched,
+      containerSize = containerSize,
+      getConfig = getConfig,
+    )?.also { hit ->
+      bestHit = hit
+    }
+  }
+
+  for (index in groups.indices.reversed()) {
+    if (index == selectedGroupIndex) continue
+    val candidate = findNearestTouchedPointInGroup(
+      groupIndex = index,
+      group = groups[index],
+      touched = touched,
+      containerSize = containerSize,
+      getConfig = getConfig,
+    ) ?: continue
+    val currentBest = bestHit
+    if (currentBest == null || candidate.distanceSquared < currentBest.distanceSquared) {
+      bestHit = candidate
+    }
+  }
+
+  return bestHit
+}
+
+/** 在单个标定组内查找距离触摸点最近的命中顶点，距离相等时上层标定项优先 */
+internal inline fun Density.findNearestTouchedPointInGroup(
+  groupIndex: Int,
   group: RenderGroup,
   touched: Offset,
   containerSize: Size,
   getConfig: (Calibration) -> CalibrationConfig,
-): RenderPoint? {
+): TouchedPointHit? {
+  var bestHit: TouchedPointHit? = null
   for (index in group.calibrations.indices.reversed()) {
     val renderCalibration = group.calibrations[index]
     val calibration = Snapshot.withoutReadObservation {
       renderCalibration.toCalibration()
     }
     val config = getConfig(calibration)
-    val point = renderCalibration.findTouchedPoint(
+    val candidate = renderCalibration.findNearestTouchedPoint(
+      groupIndex = groupIndex,
       touched = touched,
       containerSize = containerSize,
       touchedSize = config.pointTouchedSize.toPx(),
-    )
-    if (point != null) {
-      return point
+    ) ?: continue
+    val currentBest = bestHit
+    if (currentBest == null || candidate.distanceSquared < currentBest.distanceSquared) {
+      bestHit = candidate
     }
   }
-  return null
+  return bestHit
 }
 
-/** 按绘制逆序在单个标定项中查找最上层命中的顶点 */
-internal fun RenderCalibration.findTouchedPoint(
+/** 在单个标定项内按圆形热区查找最近顶点，距离相等时后绘制的顶点优先 */
+internal fun RenderCalibration.findNearestTouchedPoint(
+  groupIndex: Int,
   touched: Offset,
   containerSize: Size,
   touchedSize: Float,
-): RenderPoint? {
+): TouchedPointHit? {
+  if (containerSize.width <= 0f || containerSize.height <= 0f || touchedSize <= 0f) {
+    return null
+  }
+  val radius = touchedSize / 2f
+  val maxDistanceSquared = radius * radius
   return Snapshot.withoutReadObservation {
-    points.lastOrNull { point ->
-      val absoluteOffset = point.toCalibrationPoint().toComposeOffset(containerSize)
-      Rect(center = absoluteOffset, radius = touchedSize / 2f).contains(touched)
+    var bestPoint: RenderPoint? = null
+    var bestDistanceSquared = Float.POSITIVE_INFINITY
+    for (index in points.indices.reversed()) {
+      val point = points[index]
+      val center = point.toCalibrationPoint().toComposeOffset(containerSize)
+      val distanceSquared = (touched - center).getDistanceSquared()
+      if (distanceSquared <= maxDistanceSquared && distanceSquared < bestDistanceSquared) {
+        bestPoint = point
+        bestDistanceSquared = distanceSquared
+      }
+    }
+    bestPoint?.let { point ->
+      TouchedPointHit(
+        groupIndex = groupIndex,
+        point = point,
+        distanceSquared = bestDistanceSquared,
+      )
     }
   }
 }

@@ -3,6 +3,7 @@ package com.sd.lib.compose.calibration
 import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.Density
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -162,22 +163,80 @@ class CalibrationStateTest {
   }
 
   @Test
-  fun findTouchedPointPrefersTopmostOverlappingPoint() {
-    val calibration = RenderCalibration(
+  fun findNearestTouchedPointPrefersClosestPointAndBreaksTiesByTopmostOrder() {
+    val containerSize = Size(1000f, 1000f)
+    val density = Density(1f)
+
+    // 1. 热区重叠时优先命中距离手指更近的下层顶点
+    val closePointsCalibration = RenderCalibration(
       id = "roi",
       points = listOf(
-        RenderPoint(name = "Bottom", x = 0.5f, y = 0.5f),
-        RenderPoint(name = "Top", x = 0.5f, y = 0.5f),
+        RenderPoint(name = "Bottom", x = 0.50f, y = 0.50f),
+        RenderPoint(name = "Top", x = 0.52f, y = 0.50f),
+      ),
+    )
+    val nearBottom = closePointsCalibration.findNearestTouchedPoint(
+      groupIndex = 0,
+      touched = Offset(502f, 500f),
+      containerSize = containerSize,
+      touchedSize = 64f,
+    )
+    assertEquals("Bottom", nearBottom?.point?.name)
+
+    // 2. 坐标完全重合（距离相等）时优先命中上层后绘制的顶点
+    val coincidedCalibration = RenderCalibration(
+      id = "roi",
+      points = listOf(
+        RenderPoint(name = "Bottom", x = 0.50f, y = 0.50f),
+        RenderPoint(name = "Top", x = 0.50f, y = 0.50f),
+      ),
+    )
+    val onTie = coincidedCalibration.findNearestTouchedPoint(
+      groupIndex = 0,
+      touched = Offset(500f, 500f),
+      containerSize = containerSize,
+      touchedSize = 32f,
+    )
+    assertEquals("Top", onTie?.point?.name)
+
+    // 3. 圆形热区剔除方形四角超出半径的触摸点（半径 20px，四角偏移 (18, 18) 距离约 25.45px）
+    assertNull(
+      coincidedCalibration.findNearestTouchedPoint(
+        groupIndex = 0,
+        touched = Offset(518f, 518f),
+        containerSize = containerSize,
+        touchedSize = 40f,
       ),
     )
 
-    val touched = calibration.findTouchedPoint(
-      touched = Offset(500f, 500f),
-      containerSize = Size(1000f, 1000f),
-      touchedSize = 32f,
-    )
+    // 4. 跨标定组：未选中组顶点明显更近时优先命中未选中组，完全重合时保留当前选中组
+    val group0 = RenderGroup(listOf(RenderCalibration("c0", listOf(RenderPoint("SelectedFar", 0.52f, 0.50f)))))
+    val group1 = RenderGroup(listOf(RenderCalibration("c1", listOf(RenderPoint("UnselectedNear", 0.50f, 0.50f)))))
+    val crossGroupHit = with(density) {
+      findNearestTouchedPoint(
+        groups = listOf(group0, group1),
+        selectedGroupIndex = 0,
+        touched = Offset(501f, 500f),
+        containerSize = containerSize,
+        getConfig = { CalibrationConfig(pointTouchedSize = androidx.compose.ui.unit.Dp(64f)) },
+      )
+    }
+    assertEquals(1, crossGroupHit?.groupIndex)
+    assertEquals("UnselectedNear", crossGroupHit?.point?.name)
 
-    assertEquals("Top", touched?.name)
+    val overlapGroup0 = RenderGroup(listOf(RenderCalibration("c0", listOf(RenderPoint("SelectedOverlap", 0.50f, 0.50f)))))
+    val overlapGroup1 = RenderGroup(listOf(RenderCalibration("c1", listOf(RenderPoint("UnselectedOverlap", 0.50f, 0.50f)))))
+    val overlapSelectedHit = with(density) {
+      findNearestTouchedPoint(
+        groups = listOf(overlapGroup0, overlapGroup1),
+        selectedGroupIndex = 0,
+        touched = Offset(500f, 500f),
+        containerSize = containerSize,
+        getConfig = { CalibrationConfig(pointTouchedSize = androidx.compose.ui.unit.Dp(64f)) },
+      )
+    }
+    assertEquals(0, overlapSelectedHit?.groupIndex)
+    assertEquals("SelectedOverlap", overlapSelectedHit?.point?.name)
   }
 
   @Test
