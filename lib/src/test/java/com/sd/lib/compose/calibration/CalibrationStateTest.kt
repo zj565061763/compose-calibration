@@ -316,6 +316,39 @@ class CalibrationStateTest {
   }
 
   @Test
+  fun keyedSaverRejectsMismatchedKeyAndHandlesNonSaveableKeySafely() {
+    val state = CalibrationState(initialGroups = createRectGroups(id = "roi", x = 0.65f, y = 0.75f))
+    state.selectGroup(0)
+
+    val slotASaver = createKeyedSaver(TestSlot.SlotA)
+    val savedForSlotA = with(slotASaver) {
+      BundleCompatibleSaverScope.save(state)
+    }
+    assertNotNull(savedForSlotA)
+    assertTrue(BundleCompatibleSaverScope.canBeSaved(savedForSlotA!!))
+
+    // 相同 key 正常恢复
+    val restoredSlotA = slotASaver.restore(savedForSlotA)
+    assertNotNull(restoredSlotA)
+    assertEquals(0.65f, restoredSlotA!!.groups.findPoints("roi")!!.first().x, 0f)
+    assertEquals(0, restoredSlotA.selectedGroupIndex)
+
+    // 离开组合树期间 key 变更为其他机位时放弃恢复旧状态
+    val slotBSaver = createKeyedSaver(TestSlot.SlotB)
+    assertNull(slotBSaver.restore(savedForSlotA))
+    assertNull(createKeyedSaver(null).restore(savedForSlotA))
+
+    // 不可保存的普通对象 key 不会写入 Bundle，避免序列化崩溃
+    val customKeySaver = createKeyedSaver(Any())
+    val savedWithCustomKey = with(customKeySaver) {
+      BundleCompatibleSaverScope.save(state)
+    }
+    assertNotNull(savedWithCustomKey)
+    assertTrue(BundleCompatibleSaverScope.canBeSaved(savedWithCustomKey!!))
+    assertNotNull(customKeySaver.restore(savedWithCustomKey))
+  }
+
+  @Test
   fun builtinDrawersSupportStructuralEquality() {
     assertEquals(CalibrationDrawer.create(), CalibrationDrawer.Default)
     assertEquals(
@@ -360,6 +393,11 @@ class CalibrationStateTest {
   }
 }
 
+private enum class TestSlot {
+  SlotA,
+  SlotB,
+}
+
 private object BundleCompatibleSaverScope : SaverScope {
   override fun canBeSaved(value: Any): Boolean {
     return isBundleCompatible(value)
@@ -388,7 +426,7 @@ private fun createRectGroups(
 
 private fun isBundleCompatible(value: Any?): Boolean {
   return when (value) {
-    null, is String, is Int, is Float, is Double, is Long, is Boolean -> true
+    null, is String, is Int, is Float, is Double, is Long, is Boolean, is Enum<*> -> true
     is ArrayList<*> -> value.all { isBundleCompatible(it) }
     else -> false
   }

@@ -1,10 +1,12 @@
 package com.sd.lib.compose.calibration
 
+import android.os.Parcelable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 
@@ -19,7 +21,8 @@ fun rememberCalibrationState(
   initialGroups: List<CalibrationGroup> = emptyList(),
   key: Any? = null,
 ): CalibrationState {
-  return rememberSaveable(key, saver = CalibrationState.Saver) {
+  val saver = remember(key) { createKeyedSaver(key) }
+  return rememberSaveable(key, saver = saver) {
     CalibrationState(initialGroups = initialGroups)
   }
 }
@@ -215,6 +218,29 @@ private fun CalibrationPoint.toRenderPoint(): RenderPoint {
   )
 }
 
+/** 创建校验[key]一致性的[Saver]，防止离开组合树期间[key]变化导致旧状态误恢复 */
+internal fun createKeyedSaver(key: Any?): Saver<CalibrationState, Any> {
+  return Saver(
+    save = { state ->
+      val savedState = with(CalibrationState.Saver) { save(state) } ?: return@Saver null
+      val saveKey = isSaveableKey(key)
+      arrayListOf(
+        saveKey,
+        if (saveKey) key else null,
+        savedState,
+      )
+    },
+    restore = { raw ->
+      val list = raw as? List<*> ?: return@Saver null
+      if (list.size != 3) return@Saver null
+      val hasSavedKey = list[0] as? Boolean ?: return@Saver null
+      if (hasSavedKey && list[1] != key) return@Saver null
+      val savedState = list[2] ?: return@Saver null
+      CalibrationState.Saver.restore(savedState)
+    },
+  )
+}
+
 private fun serializeGroups(groups: List<CalibrationGroup>): ArrayList<Any> {
   return ArrayList<Any>(groups.size).also { groupList ->
     for (group in groups) {
@@ -256,4 +282,23 @@ private fun deserializeGroups(raw: Any?): List<CalibrationGroup>? {
     groups.add(CalibrationGroup(calibrations = calibrations))
   }
   return groups
+}
+
+private fun isSaveableKey(key: Any?): Boolean {
+  return when (key) {
+    null,
+    is String,
+    is Int,
+    is Long,
+    is Short,
+    is Byte,
+    is Float,
+    is Double,
+    is Boolean,
+    is Char,
+    is Enum<*>,
+    is Parcelable,
+    -> true
+    else -> false
+  }
 }
