@@ -346,6 +346,43 @@ class CalibrationStateTest {
     assertNotNull(savedWithCustomKey)
     assertTrue(BundleCompatibleSaverScope.canBeSaved(savedWithCustomKey!!))
     assertNotNull(customKeySaver.restore(savedWithCustomKey))
+
+    // 复合 key（Pair / Triple / List）递归转为 ArrayList 保存并校验元素变更
+    val pairASaver = createKeyedSaver("cam1" to TestSlot.SlotA)
+    val savedPairA = with(pairASaver) {
+      BundleCompatibleSaverScope.save(state)
+    }
+    assertNotNull(savedPairA)
+    assertTrue(BundleCompatibleSaverScope.canBeSaved(savedPairA!!))
+    assertNotNull(createKeyedSaver("cam1" to TestSlot.SlotA).restore(savedPairA))
+    assertNull(createKeyedSaver("cam1" to TestSlot.SlotB).restore(savedPairA))
+
+    val tripleSaver = createKeyedSaver(Triple("cam1", TestSlot.SlotA, 1))
+    val savedTriple = with(tripleSaver) {
+      BundleCompatibleSaverScope.save(state)
+    }
+    assertNotNull(savedTriple)
+    assertTrue(BundleCompatibleSaverScope.canBeSaved(savedTriple!!))
+    assertNotNull(createKeyedSaver(Triple("cam1", TestSlot.SlotA, 1)).restore(savedTriple))
+    assertNull(createKeyedSaver(Triple("cam1", TestSlot.SlotA, 2)).restore(savedTriple))
+
+    val listSaver = createKeyedSaver(listOf("cam1", TestSlot.SlotA))
+    val savedList = with(listSaver) {
+      BundleCompatibleSaverScope.save(state)
+    }
+    assertNotNull(savedList)
+    assertTrue(BundleCompatibleSaverScope.canBeSaved(savedList!!))
+    assertNotNull(createKeyedSaver(listOf("cam1", TestSlot.SlotA)).restore(savedList))
+    assertNull(createKeyedSaver(listOf("cam1", TestSlot.SlotB)).restore(savedList))
+
+    // 含不可保存元素的复合 key 整体退化为不写 Bundle，避免序列化崩溃
+    val mixedPairSaver = createKeyedSaver("cam1" to Any())
+    val savedMixedPair = with(mixedPairSaver) {
+      BundleCompatibleSaverScope.save(state)
+    }
+    assertNotNull(savedMixedPair)
+    assertTrue(BundleCompatibleSaverScope.canBeSaved(savedMixedPair!!))
+    assertNotNull(mixedPairSaver.restore(savedMixedPair))
   }
 
   @Test

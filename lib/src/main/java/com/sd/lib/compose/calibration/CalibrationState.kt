@@ -220,13 +220,14 @@ private fun CalibrationPoint.toRenderPoint(): RenderPoint {
 
 /** 创建校验[key]一致性的[Saver]，防止离开组合树期间[key]变化导致旧状态误恢复 */
 internal fun createKeyedSaver(key: Any?): Saver<CalibrationState, Any> {
+  val encodedKey = encodeSaveableKey(key)
+  val hasSaveableKey = encodedKey !== UnsaveableKey
   return Saver(
     save = { state ->
       val savedState = with(CalibrationState.Saver) { save(state) } ?: return@Saver null
-      val saveKey = isSaveableKey(key)
       arrayListOf(
-        saveKey,
-        if (saveKey) key else null,
+        hasSaveableKey,
+        if (hasSaveableKey) encodedKey else null,
         savedState,
       )
     },
@@ -234,7 +235,7 @@ internal fun createKeyedSaver(key: Any?): Saver<CalibrationState, Any> {
       val list = raw as? List<*> ?: return@Saver null
       if (list.size != 3) return@Saver null
       val hasSavedKey = list[0] as? Boolean ?: return@Saver null
-      if (hasSavedKey && list[1] != key) return@Saver null
+      if (hasSavedKey && (!hasSaveableKey || list[1] != encodedKey)) return@Saver null
       val savedState = list[2] ?: return@Saver null
       CalibrationState.Saver.restore(savedState)
     },
@@ -284,7 +285,9 @@ private fun deserializeGroups(raw: Any?): List<CalibrationGroup>? {
   return groups
 }
 
-private fun isSaveableKey(key: Any?): Boolean {
+private data object UnsaveableKey
+
+private fun encodeSaveableKey(key: Any?): Any? {
   return when (key) {
     null,
     is String,
@@ -298,7 +301,20 @@ private fun isSaveableKey(key: Any?): Boolean {
     is Char,
     is Enum<*>,
     is Parcelable,
-    -> true
-    else -> false
+    -> key
+    is Pair<*, *> -> encodeSaveableList(listOf(key.first, key.second))
+    is Triple<*, *, *> -> encodeSaveableList(listOf(key.first, key.second, key.third))
+    is List<*> -> encodeSaveableList(key)
+    else -> UnsaveableKey
   }
+}
+
+private fun encodeSaveableList(items: List<*>): Any {
+  val result = ArrayList<Any?>(items.size)
+  for (item in items) {
+    val encoded = encodeSaveableKey(item)
+    if (encoded === UnsaveableKey) return UnsaveableKey
+    result.add(encoded)
+  }
+  return result
 }
